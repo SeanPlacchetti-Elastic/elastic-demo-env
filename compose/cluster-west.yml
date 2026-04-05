@@ -1,0 +1,253 @@
+services:
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # CLUSTER-WEST: Operations / NOC cluster
+  # Reads east production data via CCS.  Hosts alerting rules.
+  # Stack monitoring (elasticsearch + kibana metrics) ships locally.
+  # No APM server, no filebeat — all observability data lives on east.
+  # ES: https://localhost:9200  Kibana: https://localhost:5601
+  # ─────────────────────────────────────────────────────────────────────────────
+  west-es01:
+    depends_on:
+      setup:
+        condition: service_healthy
+    image: docker.elastic.co/elasticsearch/elasticsearch:${STACK_VERSION}
+    labels:
+      co.elastic.logs/module: elasticsearch
+    networks:
+      - net-west
+      - net-ccs
+    volumes:
+      - certs:/usr/share/elasticsearch/config/certs
+      - west-esdata01:/usr/share/elasticsearch/data
+    ports:
+      - ${WEST_ES_PORT}:9200
+    environment:
+      - node.name=west-es01
+      - cluster.name=${WEST_CLUSTER_NAME}
+      - discovery.seed_hosts=west-es01,west-es02,west-es03
+      - cluster.initial_master_nodes=west-es01,west-es02,west-es03
+      - ELASTIC_PASSWORD=${ELASTIC_PASSWORD}
+      - bootstrap.memory_lock=true
+      - xpack.security.enabled=true
+      - xpack.security.http.ssl.enabled=true
+      - xpack.security.http.ssl.key=certs/west-es01/west-es01.key
+      - xpack.security.http.ssl.certificate=certs/west-es01/west-es01.crt
+      - xpack.security.http.ssl.certificate_authorities=certs/ca/ca.crt
+      - xpack.security.transport.ssl.enabled=true
+      - xpack.security.transport.ssl.key=certs/west-es01/west-es01.key
+      - xpack.security.transport.ssl.certificate=certs/west-es01/west-es01.crt
+      - xpack.security.transport.ssl.certificate_authorities=certs/ca/ca.crt
+      - xpack.security.transport.ssl.verification_mode=certificate
+      - xpack.license.self_generated.type=${LICENSE}
+    mem_limit: ${ES_MEM_LIMIT}
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "curl -s --cacert config/certs/ca/ca.crt https://localhost:9200 | grep -q 'missing authentication credentials'",
+        ]
+      interval: 10s
+      timeout: 10s
+      retries: 120
+
+  west-es02:
+    depends_on:
+      setup:
+        condition: service_healthy
+    image: docker.elastic.co/elasticsearch/elasticsearch:${STACK_VERSION}
+    labels:
+      co.elastic.logs/module: elasticsearch
+    networks:
+      - net-west
+      - net-ccs
+    volumes:
+      - certs:/usr/share/elasticsearch/config/certs
+      - west-esdata02:/usr/share/elasticsearch/data
+    environment:
+      - node.name=west-es02
+      - cluster.name=${WEST_CLUSTER_NAME}
+      - discovery.seed_hosts=west-es01,west-es02,west-es03
+      - cluster.initial_master_nodes=west-es01,west-es02,west-es03
+      - ELASTIC_PASSWORD=${ELASTIC_PASSWORD}
+      - bootstrap.memory_lock=true
+      - xpack.security.enabled=true
+      - xpack.security.http.ssl.enabled=true
+      - xpack.security.http.ssl.key=certs/west-es02/west-es02.key
+      - xpack.security.http.ssl.certificate=certs/west-es02/west-es02.crt
+      - xpack.security.http.ssl.certificate_authorities=certs/ca/ca.crt
+      - xpack.security.transport.ssl.enabled=true
+      - xpack.security.transport.ssl.key=certs/west-es02/west-es02.key
+      - xpack.security.transport.ssl.certificate=certs/west-es02/west-es02.crt
+      - xpack.security.transport.ssl.certificate_authorities=certs/ca/ca.crt
+      - xpack.security.transport.ssl.verification_mode=certificate
+      - xpack.license.self_generated.type=${LICENSE}
+    mem_limit: ${ES_MEM_LIMIT}
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "curl -s --cacert config/certs/ca/ca.crt https://localhost:9200 | grep -q 'missing authentication credentials'",
+        ]
+      interval: 10s
+      timeout: 10s
+      retries: 120
+
+  west-es03:
+    depends_on:
+      setup:
+        condition: service_healthy
+    image: docker.elastic.co/elasticsearch/elasticsearch:${STACK_VERSION}
+    labels:
+      co.elastic.logs/module: elasticsearch
+    networks:
+      - net-west
+      - net-ccs
+    volumes:
+      - certs:/usr/share/elasticsearch/config/certs
+      - west-esdata03:/usr/share/elasticsearch/data
+    environment:
+      - node.name=west-es03
+      - cluster.name=${WEST_CLUSTER_NAME}
+      - discovery.seed_hosts=west-es01,west-es02,west-es03
+      - cluster.initial_master_nodes=west-es01,west-es02,west-es03
+      - ELASTIC_PASSWORD=${ELASTIC_PASSWORD}
+      - bootstrap.memory_lock=true
+      - xpack.security.enabled=true
+      - xpack.security.http.ssl.enabled=true
+      - xpack.security.http.ssl.key=certs/west-es03/west-es03.key
+      - xpack.security.http.ssl.certificate=certs/west-es03/west-es03.crt
+      - xpack.security.http.ssl.certificate_authorities=certs/ca/ca.crt
+      - xpack.security.transport.ssl.enabled=true
+      - xpack.security.transport.ssl.key=certs/west-es03/west-es03.key
+      - xpack.security.transport.ssl.certificate=certs/west-es03/west-es03.crt
+      - xpack.security.transport.ssl.certificate_authorities=certs/ca/ca.crt
+      - xpack.security.transport.ssl.verification_mode=certificate
+      - xpack.license.self_generated.type=${LICENSE}
+    mem_limit: ${ES_MEM_LIMIT}
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "curl -s --cacert config/certs/ca/ca.crt https://localhost:9200 | grep -q 'missing authentication credentials'",
+        ]
+      interval: 10s
+      timeout: 10s
+      retries: 120
+
+  kibana-west:
+    depends_on:
+      west-es01:
+        condition: service_healthy
+    image: docker.elastic.co/kibana/kibana:${STACK_VERSION}
+    labels:
+      co.elastic.logs/module: kibana
+    networks:
+      - net-west
+    volumes:
+      - certs:/usr/share/kibana/config/certs
+      - west-kibanadata:/usr/share/kibana/data
+      - ../config/kibana.yml:/usr/share/kibana/config/kibana.yml:ro
+    ports:
+      - ${KIBANA_PORT}:5601
+    environment:
+      - SERVERNAME=kibana-west
+      - ELASTICSEARCH_HOSTS=https://west-es01:9200
+      - ELASTICSEARCH_USERNAME=kibana_system
+      - ELASTICSEARCH_PASSWORD=${KIBANA_PASSWORD}
+      - ELASTICSEARCH_SSL_CERTIFICATEAUTHORITIES=config/certs/ca/ca.crt
+      - XPACK_SECURITY_ENCRYPTIONKEY=${ENCRYPTION_KEY}
+      - XPACK_ENCRYPTEDSAVEDOBJECTS_ENCRYPTIONKEY=${ENCRYPTION_KEY}
+      - XPACK_REPORTING_ENCRYPTIONKEY=${ENCRYPTION_KEY}
+      - XPACK_REPORTING_KIBANASERVER_HOSTNAME=localhost
+      - SERVER_SSL_ENABLED=true
+      - SERVER_SSL_CERTIFICATE=config/certs/kibana-west/kibana-west.crt
+      - SERVER_SSL_KEY=config/certs/kibana-west/kibana-west.key
+      - SERVER_SSL_CERTIFICATEAUTHORITIES=config/certs/ca/ca.crt
+      - ELASTIC_APM_SECRET_TOKEN=${ELASTIC_APM_SECRET_TOKEN}
+    mem_limit: ${KB_MEM_LIMIT}
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "curl -I -s --cacert config/certs/ca/ca.crt https://localhost:5601 | grep -q 'HTTP/1.1 302 Found'",
+        ]
+      interval: 10s
+      timeout: 10s
+      retries: 120
+
+  # west-apm-server — removed. All APM data ships to east-apm-server.
+
+  # Stack monitoring only — no docker metrics (all container metrics live on east)
+  west-metricbeat:
+    depends_on:
+      west-es01:
+        condition: service_healthy
+      kibana-west:
+        condition: service_healthy
+    image: docker.elastic.co/beats/metricbeat:${STACK_VERSION}
+    user: root
+    networks:
+      - net-west
+    volumes:
+      - certs:/usr/share/metricbeat/certs
+      - west-metricbeatdata:/usr/share/metricbeat/data
+      - "../config/west-metricbeat.yml:/usr/share/metricbeat/metricbeat.yml:ro"
+    environment:
+      - ELASTIC_USER=elastic
+      - ELASTIC_PASSWORD=${ELASTIC_PASSWORD}
+      - ELASTIC_HOSTS=https://west-es01:9200
+      - KIBANA_HOSTS=https://kibana-west:5601
+      - CA_CERT=certs/ca/ca.crt
+    command: ["metricbeat", "-e", "--strict.perms=false"]
+
+  # west-filebeat — removed. All log collection handled by east-filebeat.
+
+  # West webapp — serves HTTPS directly on its own port
+  west-webapp:
+    build:
+      context: ../app
+    networks:
+      - net-east
+    ports:
+      - ${WEBAPP_PORT}:8000
+    volumes:
+      - certs:/app/certs:ro
+    environment:
+      - ELASTIC_APM_SERVICE_NAME=west-python-service
+      - ELASTIC_APM_SECRET_TOKEN=${ELASTIC_APM_SECRET_TOKEN}
+      - ELASTIC_APM_SERVER_URL=http://prod-apm-server:8200
+      - ELASTIC_APM_ENVIRONMENT=production
+      - RUM_SERVER_URL=http://localhost:${EAST_APMSERVER_PORT}
+    command:
+      - uvicorn
+      - main:app
+      - --host
+      - "0.0.0.0"
+      - --port
+      - "8000"
+      - --log-level
+      - info
+      - --workers
+      - "1"
+      - --ssl-keyfile
+      - /app/certs/apps/apps.key
+      - --ssl-certfile
+      - /app/certs/apps/apps.crt
+    depends_on:
+      setup:
+        condition: service_healthy
+      prod-apm-server:
+        condition: service_started

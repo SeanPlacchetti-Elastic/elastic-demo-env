@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-parent</artifactId>
+    <version>3.2.5</version>
+    <relativePath/>
+  </parent>
+
+  <groupId>com.demo</groupId>
+  <artifactId>catalog</artifactId>
+  <version>1.0.0</version>
+  <name>east-catalog</name>
+
+  <properties>
+    <java.version>17</java.version>
+    <elastic-apm.version>1.48.0</elastic-apm.version>
+    <ecs-logging.version>1.6.0</ecs-logging.version>
+  </properties>
+
+  <dependencies>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-web</artifactId>
+    </dependency>
+    <!-- ECS-formatted JSON logging for Logback -->
+    <dependency>
+      <groupId>co.elastic.logging</groupId>
+      <artifactId>logback-ecs-encoder</artifactId>
+      <version>${ecs-logging.version}</version>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-maven-plugin</artifactId>
+      </plugin>
+      <!-- Download the Elastic APM Java agent so the Dockerfile can attach it -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-dependency-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>copy-apm-agent</id>
+            <phase>package</phase>
+            <goals><goal>copy</goal></goals>
+            <configuration>
+              <artifactItems>
+                <artifactItem>
+                  <groupId>co.elastic.apm</groupId>
+                  <artifactId>elastic-apm-agent</artifactId>
+                  <version>${elastic-apm.version}</version>
+                  <outputDirectory>${project.build.directory}</outputDirectory>
+                  <destFileName>elastic-apm-agent.jar</destFileName>
+                </artifactItem>
+              </artifactItems>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
+</project>

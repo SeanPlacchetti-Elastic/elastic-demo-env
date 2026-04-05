@@ -1,0 +1,35 @@
+# syntax=docker/dockerfile:1
+# ── Build stage ───────────────────────────────────────────────────────────────
+FROM rust:1.83-slim AS build
+WORKDIR /app
+
+# Build dependencies for openssl (reqwest default TLS backend)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    pkg-config libssl-dev && \
+    rm -rf /var/lib/apt/lists/*
+
+# Cache dependency compilation: build a stub main first so cargo fetches and
+# compiles all dependencies before copying the real source.
+COPY Cargo.toml .
+RUN mkdir src && echo 'fn main(){}' > src/main.rs \
+    && cargo build --release \
+    && rm src/main.rs
+
+# Build the real service
+COPY src/ src/
+RUN touch src/main.rs && cargo build --release
+
+# ── Runtime stage ─────────────────────────────────────────────────────────────
+FROM debian:bookworm-slim
+WORKDIR /app
+
+# Runtime OpenSSL library
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates libssl3 && \
+    rm -rf /var/lib/apt/lists/*
+
+COPY --from=build /app/target/release/east-recommendations .
+
+# APM is configured entirely via environment variables:
+#   OTEL_EXPORTER_OTLP_ENDPOINT, ELASTIC_APM_SECRET_TOKEN, ELASTIC_APM_ENVIRONMENT
+CMD ["/app/east-recommendations"]

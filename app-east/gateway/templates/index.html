@@ -1,0 +1,631 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>east-gateway</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg:           #fafbfd;
+      --surface:      #fff;
+      --surface-hi:   #F5F7FA;
+      --border:       #D3DAE6;
+      --text:         #343741;
+      --muted:        #98A2B3;
+      --subdued:      #69707D;
+      --primary:      #0077CC;
+      --primary-light:#e6f1fa;
+      --primary-dark: #005fa3;
+      --danger:       #BD271E;
+      --danger-bg:    #fce8e6;
+      --success:      #00BFB3;
+      --success-bg:   #e6faf8;
+      --warning:      #FEC514;
+      --accent:       #F04E98;
+      --radius-s:     4px;
+      --radius-m:     6px;
+      --radius-l:     6px;
+      --font: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: var(--font); background: var(--bg); color: var(--text); font-size: 14px; line-height: 1.5; min-height: 100vh; }
+
+    /* ── Top bar ── */
+    .top-bar {
+      height: 48px; background: #343741; border-bottom: 1px solid #25262E;
+      display: flex; align-items: center; padding: 0 24px; gap: 12px;
+      position: sticky; top: 0; z-index: 10;
+    }
+    .logo { width: 28px; height: 28px; border-radius: 6px; flex-shrink: 0;
+      background: linear-gradient(135deg, #F04E98 0%, #0077CC 100%);
+      display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px; color: #fff; }
+    .top-name { font-size: 14px; font-weight: 600; color: #fff; flex: 1; }
+    .pill { font-size: 11px; font-weight: 600; letter-spacing: .04em; padding: 3px 10px; border-radius: 20px; }
+    .pill-east  { background: rgba(0,191,179,.15); color: #00BFB3; }
+    .pill-plain { background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.2); color: rgba(255,255,255,.7); font-weight: 500; }
+
+    /* ── Layout ── */
+    .page { max-width: 1100px; margin: 0 auto; padding: 32px 24px 64px; }
+    .euiTitle { font-size: 22px; font-weight: 700; color: var(--text); margin-bottom: 6px; }
+    .page-desc  { font-size: 13px; color: var(--subdued); margin-bottom: 28px; }
+
+    /* ── Architecture strip ── */
+    .arch-strip {
+      display: flex; align-items: stretch; flex-wrap: wrap; gap: 0;
+      background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-l);
+      margin-bottom: 28px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,.04);
+    }
+    .arch-node {
+      flex: 1; min-width: 120px; padding: 14px 16px;
+      border-right: 1px solid var(--border);
+    }
+    .arch-node:last-child { border-right: none; }
+    .arch-node dt { font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-bottom: 5px; }
+    .arch-node dd { font-size: 12px; font-family: monospace; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 4px; color: var(--text); }
+    .arch-node .lang-badge { margin-top: 4px; }
+    .dot-live { color: var(--success); }
+    .dot-svc  { color: var(--primary); }
+
+    /* ── Info strip ── */
+    .euiPanel.info-strip {
+      display: flex; flex-wrap: wrap;
+      background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-l);
+      margin-bottom: 32px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,.04);
+    }
+    .info-cell { flex: 1; min-width: 130px; padding: 14px 20px; border-right: 1px solid var(--border); }
+    .info-cell:last-child { border-right: none; }
+    .info-cell dt { font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-bottom: 4px; }
+    .info-cell dd { font-size: 12px; color: var(--text); font-family: monospace; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+    /* ── Section label ── */
+    .section-label {
+      font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+      color: var(--muted); padding-bottom: 8px; border-bottom: 1px solid var(--border); margin-bottom: 16px;
+    }
+
+    /* ── Language badges (light theme) ── */
+    .lang-badge {
+      display: inline-block; font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 3px;
+    }
+    .lang-python { background: #e6f5e0; color: #2d7d32; }
+    .lang-java   { background: #fff3e0; color: #e65100; }
+    .lang-go     { background: #e0f7f5; color: #00796b; }
+    .lang-dotnet { background: #f0e6f6; color: #7b1fa2; }
+    .lang-php    { background: #ede0f7; color: #8e24aa; }
+    .lang-rust   { background: #fff8e1; color: #e8833a; }
+    .lang-ruby   { background: #fce8e6; color: #c62828; }
+    .lang-es     { background: #e6f1fa; color: #0077CC; }
+
+    /* ── Cards ── */
+    .card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 14px; margin-bottom: 32px; }
+    .euiCard {
+      background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-l);
+      padding: 18px; display: flex; flex-direction: column; gap: 10px;
+      box-shadow: 0 1px 3px rgba(0,0,0,.04); transition: box-shadow .15s, border-color .15s;
+    }
+    .euiCard:hover { box-shadow: 0 4px 12px rgba(0,0,0,.08); border-color: #b9c3d2; }
+    .card-head { display: flex; align-items: center; gap: 10px; }
+    .card-icon { width: 32px; height: 32px; border-radius: var(--radius-m); flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 15px; }
+    .icon-catalog         { background: #e6f5e0; }
+    .icon-inventory       { background: #e0f7f5; }
+    .icon-pricing         { background: #f0e6f6; }
+    .icon-reviews         { background: #ede0f7; }
+    .icon-orders          { background: #fff8e1; }
+    .icon-recommendations { background: #fce8e6; }
+    .icon-danger          { background: var(--danger-bg); }
+    .icon-message         { background: var(--surface-hi); border: 1px solid var(--border); }
+    .card-title { font-size: 14px; font-weight: 600; color: var(--text); }
+    .card-desc  { font-size: 12px; color: var(--subdued); line-height: 1.6; flex: 1; }
+    .mono { background: var(--surface-hi); border: 1px solid var(--border); border-radius: 3px; padding: 1px 5px; font-size: 11px; color: var(--primary); font-family: monospace; }
+
+    /* ── Input row ── */
+    .field-row { display: flex; gap: 8px; }
+    .eui-input {
+      flex: 1; min-width: 0; background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-m); color: var(--text); font-family: var(--font);
+      font-size: 14px; padding: 0 12px; height: 36px; outline: none; transition: border-color .15s, box-shadow .15s;
+    }
+    .eui-input:focus { border-color: var(--primary); box-shadow: 0 0 0 1px var(--primary); }
+    .eui-input::placeholder { color: var(--muted); }
+
+    /* ── Buttons ── */
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+      height: 36px; padding: 0 16px; border: none; border-radius: var(--radius-m);
+      font-family: var(--font); font-size: 13px; font-weight: 600;
+      cursor: pointer; white-space: nowrap; transition: background .12s, opacity .12s, box-shadow .12s;
+    }
+    .btn:disabled { opacity: .45; cursor: not-allowed; }
+    .btn-catalog   { background: #e6f5e0; color: #2d7d32; border: 1px solid #c8e6c9; }
+    .btn-catalog:hover:not(:disabled)   { background: #d4edda; box-shadow: 0 2px 4px rgba(45,125,50,.12); }
+    .btn-inventory { background: #e0f7f5; color: #00796b; border: 1px solid #b2dfdb; }
+    .btn-inventory:hover:not(:disabled) { background: #ccf0ec; box-shadow: 0 2px 4px rgba(0,121,107,.12); }
+    .btn-pricing   { background: #f0e6f6; color: #7b1fa2; border: 1px solid #e1bee7; }
+    .btn-pricing:hover:not(:disabled)   { background: #e8d5f0; box-shadow: 0 2px 4px rgba(123,31,162,.12); }
+    .btn-reviews          { background: #ede0f7; color: #8e24aa; border: 1px solid #d1c4e9; }
+    .btn-reviews:hover:not(:disabled)         { background: #e0d0f0; box-shadow: 0 2px 4px rgba(142,36,170,.12); }
+    .btn-orders           { background: #fff8e1; color: #e8833a; border: 1px solid #ffe0b2; }
+    .btn-orders:hover:not(:disabled)          { background: #fff0c8; box-shadow: 0 2px 4px rgba(232,131,58,.12); }
+    .btn-recommendations  { background: #fce8e6; color: #c62828; border: 1px solid #f8bbd0; }
+    .btn-recommendations:hover:not(:disabled) { background: #f5d0cc; box-shadow: 0 2px 4px rgba(198,40,40,.12); }
+    .btn-danger    { background: var(--danger); color: #fff; }
+    .btn-danger:hover:not(:disabled)    { background: #a1221b; box-shadow: 0 2px 4px rgba(189,39,30,.2); }
+    .btn-primary   { background: var(--primary); color: #fff; }
+    .btn-primary:hover:not(:disabled)   { background: var(--primary-dark); box-shadow: 0 2px 4px rgba(0,119,204,.2); }
+    .btn-ghost     { background: transparent; border: 1px solid var(--border); color: var(--subdued); }
+    .btn-ghost:hover:not(:disabled)     { background: var(--surface-hi); color: var(--text); }
+
+    /* ── Activity log ── */
+    .log-panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-l); overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,.04); }
+    .log-toolbar { display: flex; align-items: center; justify-content: space-between; padding: 10px 16px; border-bottom: 1px solid var(--border); background: var(--surface-hi); }
+    .log-toolbar-label { font-size: 12px; font-weight: 600; color: var(--subdued); }
+    .log-scroll { min-height: 128px; max-height: 320px; overflow-y: auto; }
+    .log-empty { height: 128px; display: flex; align-items: center; justify-content: center; font-size: 13px; color: var(--muted); }
+    .log-row { display: grid; grid-template-columns: 76px 110px 80px 1fr; gap: 10px; align-items: baseline; padding: 9px 16px; border-bottom: 1px solid #eef1f7; font-size: 12px; animation: popIn .18s ease; }
+    @keyframes popIn { from { opacity: 0; transform: translateY(-3px); } to { opacity: 1; } }
+    .log-ts  { color: var(--muted); font-family: monospace; }
+    .log-svc { font-family: monospace; font-size: 11px; }
+    .type-catalog         { color: #2d7d32; font-weight: 700; }
+    .type-inventory       { color: #00796b; font-weight: 700; }
+    .type-pricing         { color: #7b1fa2; font-weight: 700; }
+    .type-reviews         { color: #8e24aa; font-weight: 700; }
+    .type-orders          { color: #e8833a; font-weight: 700; }
+    .type-recommendations { color: #c62828; font-weight: 700; }
+    .type-err             { color: var(--danger); font-weight: 700; }
+    .type-msg             { color: var(--primary); font-weight: 700; }
+    .type-search          { color: #0077CC; font-weight: 700; }
+    .log-body { color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .log-scroll::-webkit-scrollbar { width: 5px; }
+    .log-scroll::-webkit-scrollbar-thumb { background: #D3DAE6; border-radius: 3px; }
+
+    /* ── Search ── */
+    .search-section { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-l); padding: 20px; margin-bottom: 32px; box-shadow: 0 1px 3px rgba(0,0,0,.04); }
+    .search-tabs { display: flex; gap: 4px; margin-bottom: 14px; }
+    .search-tab { padding: 6px 14px; border: 1px solid var(--border); border-radius: var(--radius-m); background: var(--surface); color: var(--subdued); font-family: var(--font); font-size: 12px; font-weight: 600; cursor: pointer; transition: background .12s, color .12s, border-color .12s; }
+    .search-tab:hover { background: var(--surface-hi); color: var(--text); }
+    .search-tab.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+    .search-input-row { display: flex; gap: 8px; margin-bottom: 14px; }
+    .search-input { flex: 1; min-width: 0; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-m); color: var(--text); font-family: var(--font); font-size: 14px; padding: 0 14px; height: 40px; outline: none; transition: border-color .15s, box-shadow .15s; }
+    .search-input:focus { border-color: var(--primary); box-shadow: 0 0 0 1px var(--primary); }
+    .search-input::placeholder { color: var(--muted); }
+    .search-btn { height: 40px; padding: 0 20px; border: none; border-radius: var(--radius-m); background: var(--primary); color: #fff; font-family: var(--font); font-size: 13px; font-weight: 600; cursor: pointer; transition: background .12s; }
+    .search-btn:hover { background: var(--primary-dark); }
+    .search-meta { font-size: 11px; color: var(--muted); margin-bottom: 10px; }
+    .search-results { display: flex; flex-direction: column; gap: 8px; max-height: 360px; overflow-y: auto; }
+    .search-result { display: flex; justify-content: space-between; align-items: baseline; padding: 10px 14px; background: var(--surface-hi); border: 1px solid var(--border); border-radius: var(--radius-m); transition: border-color .12s; }
+    .search-result:hover { border-color: #b9c3d2; }
+    .sr-name { font-size: 13px; font-weight: 600; color: var(--text); }
+    .sr-desc { font-size: 11px; color: var(--subdued); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 500px; }
+    .sr-right { text-align: right; flex-shrink: 0; margin-left: 16px; }
+    .sr-cat { font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 3px; background: #e6f1fa; color: #0077CC; }
+    .sr-score { font-size: 10px; color: var(--muted); margin-top: 2px; }
+    .sr-price { font-size: 12px; color: #00796b; font-weight: 600; }
+    .suggest-list { display: flex; flex-direction: column; gap: 4px; }
+    .suggest-item { padding: 8px 14px; background: var(--surface-hi); border: 1px solid var(--border); border-radius: var(--radius-m); font-size: 13px; color: var(--text); cursor: pointer; display: flex; justify-content: space-between; transition: border-color .12s, background .12s; }
+    .suggest-item:hover { border-color: var(--primary); background: var(--primary-light); }
+
+    /* ── Toasts ── */
+    .toasts { position: fixed; bottom: 24px; right: 24px; display: flex; flex-direction: column; gap: 8px; z-index: 100; pointer-events: none; }
+    .toast { background: var(--surface); border: 1px solid var(--border); border-left: 3px solid var(--primary); border-radius: var(--radius-m); padding: 10px 16px; font-size: 13px; color: var(--text); pointer-events: all; animation: slideIn .2s ease; max-width: 300px; box-shadow: 0 4px 12px rgba(0,0,0,.1); }
+    .toast-err { border-left-color: var(--danger); }
+    .toast-ok  { border-left-color: var(--success); }
+    @keyframes slideIn { from { opacity:0; transform: translateX(16px); } to { opacity:1; } }
+  </style>
+  <!-- Elastic RUM agent — captures browser-side page load timing, XHR/fetch
+       spans for each downstream service call, and JS errors. The distributed
+       tracing header links these browser spans to the gateway's server-side
+       APM transactions, giving a full end-to-end trace. -->
+  <script src="https://unpkg.com/@elastic/apm-rum@5/dist/bundles/elastic-apm-rum.umd.min.js" crossorigin></script>
+  <script>
+    window.__elasticApmRum = elasticApm.init({
+      serviceName: 'east-gateway-rum',
+      serverUrl:   '{{ rum_server_url }}',
+      environment: '{{ environment }}',
+      serviceVersion: '1.0.0',
+      distributedTracing: true,
+      distributedTracingOrigins: [window.location.origin],
+      pageLoadTransactionName: window.location.pathname,
+    });
+  </script>
+</head>
+<body>
+
+<div class="top-bar">
+  <div class="logo">E</div>
+  <span class="top-name">east-gateway</span>
+  <span class="pill pill-east">cluster-east</span>
+  <span class="pill pill-plain">{{ environment }}</span>
+</div>
+
+<div class="page">
+
+  <h1 class="euiTitle">East Cluster — Multi-Language Microservices Demo</h1>
+  <p class="page-desc">The gateway fans requests out to downstream services written in Java, Go, .NET, and PHP. Each hop propagates <span class="mono">traceparent</span> so the full distributed trace is visible in Elastic APM.</p>
+
+  <!-- Architecture overview -->
+  <div class="arch-strip">
+    <div class="arch-node">
+      <dt>Gateway (this service)</dt>
+      <dd><span class="dot-live">●</span> east-gateway</dd>
+      <div><span class="lang-badge lang-python">Python</span></div>
+    </div>
+    <div class="arch-node">
+      <dt>Catalog Service</dt>
+      <dd><span class="dot-svc">●</span> east-catalog</dd>
+      <div><span class="lang-badge lang-java">Java</span></div>
+    </div>
+    <div class="arch-node">
+      <dt>Inventory Service</dt>
+      <dd><span class="dot-svc">●</span> east-inventory</dd>
+      <div><span class="lang-badge lang-go">Go</span></div>
+    </div>
+    <div class="arch-node">
+      <dt>Pricing Service</dt>
+      <dd><span class="dot-svc">●</span> east-pricing</dd>
+      <div><span class="lang-badge lang-dotnet">.NET</span></div>
+    </div>
+    <div class="arch-node">
+      <dt>Reviews Service</dt>
+      <dd><span class="dot-svc">●</span> east-reviews</dd>
+      <div><span class="lang-badge lang-php">PHP</span></div>
+    </div>
+    <div class="arch-node">
+      <dt>Orders Service</dt>
+      <dd><span class="dot-svc">●</span> east-orders</dd>
+      <div><span class="lang-badge lang-ruby">Ruby</span></div>
+    </div>
+    <div class="arch-node">
+      <dt>Recommendations</dt>
+      <dd><span class="dot-svc">●</span> east-recommendations</dd>
+      <div><span class="lang-badge lang-rust">Rust</span></div>
+    </div>
+    <div class="arch-node">
+      <dt>Search Cluster</dt>
+      <dd><span class="dot-svc">●</span> search-es01</dd>
+      <div><span class="lang-badge lang-es">ES</span></div>
+    </div>
+    <div class="arch-node">
+      <dt>Observability</dt>
+      <dd>east-apm-server</dd>
+      <dd style="color:var(--muted);font-size:11px">east-filebeat</dd>
+    </div>
+  </div>
+
+  <dl class="euiPanel info-strip">
+    <div class="info-cell">
+      <dt>Service</dt>
+      <dd>{{ service_name }}</dd>
+    </div>
+    <div class="info-cell">
+      <dt>Environment</dt>
+      <dd>{{ environment }}</dd>
+    </div>
+    <div class="info-cell">
+      <dt>Catalog</dt>
+      <dd>{{ catalog_url }}</dd>
+    </div>
+    <div class="info-cell">
+      <dt>Inventory</dt>
+      <dd>{{ inventory_url }}</dd>
+    </div>
+    <div class="info-cell">
+      <dt>Pricing</dt>
+      <dd>{{ pricing_url }}</dd>
+    </div>
+    <div class="info-cell">
+      <dt>Reviews</dt>
+      <dd>{{ reviews_url }}</dd>
+    </div>
+    <div class="info-cell">
+      <dt>Orders</dt>
+      <dd>{{ orders_url }}</dd>
+    </div>
+    <div class="info-cell">
+      <dt>Recommendations</dt>
+      <dd>{{ recommendations_url }}</dd>
+    </div>
+    <div class="info-cell">
+      <dt>Search ES</dt>
+      <dd>{{ search_es_url }}</dd>
+    </div>
+  </dl>
+
+  <p class="section-label">Product Search (powered by search-es01)</p>
+  <div class="search-section">
+    <div class="search-tabs">
+      <button class="search-tab active" onclick="setSearchMode('lexical')">Lexical Search</button>
+      <button class="search-tab" onclick="setSearchMode('asyoutype')">Search-as-you-type</button>
+      <button class="search-tab" onclick="setSearchMode('typeahead')">Typeahead Suggester</button>
+    </div>
+    <div class="search-input-row">
+      <input id="search-input" class="search-input" type="text" placeholder="Search products…" autocomplete="off">
+      <button class="search-btn" onclick="doSearch()">Search</button>
+    </div>
+    <div class="search-meta" id="search-meta"></div>
+    <div class="search-results" id="search-results"></div>
+  </div>
+
+  <p class="section-label">Downstream Services</p>
+  <div class="card-grid">
+
+    <div class="euiCard">
+      <div class="card-head">
+        <div class="card-icon icon-catalog">📦</div>
+        <span class="card-title">Browse Catalog</span>
+      </div>
+      <p class="card-desc">
+        <span class="lang-badge lang-java">Java · Spring Boot</span><br><br>
+        Calls <span class="mono">/products</span> on the catalog service. Simulates DB queries with occasional slow-query APM spans.
+      </p>
+      <div><button class="btn btn-catalog" onclick="doFetch(this,'catalog','/catalog','east-catalog')">Fetch Products</button></div>
+    </div>
+
+    <div class="euiCard">
+      <div class="card-head">
+        <div class="card-icon icon-inventory">🏭</div>
+        <span class="card-title">Check Inventory</span>
+      </div>
+      <p class="card-desc">
+        <span class="lang-badge lang-go">Go · Gin</span><br><br>
+        Calls <span class="mono">/stock</span> on the inventory service. Simulates warehouse latency spikes at 12% frequency.
+      </p>
+      <div><button class="btn btn-inventory" onclick="doFetch(this,'inventory','/inventory','east-inventory')">Fetch Stock</button></div>
+    </div>
+
+    <div class="euiCard">
+      <div class="card-head">
+        <div class="card-icon icon-pricing">💰</div>
+        <span class="card-title">Get Pricing</span>
+      </div>
+      <p class="card-desc">
+        <span class="lang-badge lang-dotnet">.NET · ASP.NET Core</span><br><br>
+        Calls <span class="mono">/prices</span> on the pricing service. Returns list prices, discount percentages, and currency.
+      </p>
+      <div><button class="btn btn-pricing" onclick="doFetch(this,'pricing','/pricing','east-pricing')">Fetch Prices</button></div>
+    </div>
+
+    <div class="euiCard">
+      <div class="card-head">
+        <div class="card-icon icon-reviews">⭐</div>
+        <span class="card-title">Read Reviews</span>
+      </div>
+      <p class="card-desc">
+        <span class="lang-badge lang-php">PHP · Slim 4</span><br><br>
+        Calls <span class="mono">/reviews</span> on the reviews service. Returns product ratings and user feedback.
+      </p>
+      <div><button class="btn btn-reviews" onclick="doFetch(this,'reviews','/reviews','east-reviews')">Fetch Reviews</button></div>
+    </div>
+
+    <div class="euiCard">
+      <div class="card-head">
+        <div class="card-icon icon-orders">🛒</div>
+        <span class="card-title">Browse Orders</span>
+      </div>
+      <p class="card-desc">
+        <span class="lang-badge lang-ruby">Ruby · Sinatra</span><br><br>
+        Calls <span class="mono">/orders</span> on the orders service. Returns order history with status and totals.
+      </p>
+      <div><button class="btn btn-orders" onclick="doFetch(this,'orders','/orders','east-orders')">Fetch Orders</button></div>
+    </div>
+
+    <div class="euiCard">
+      <div class="card-head">
+        <div class="card-icon icon-recommendations">✨</div>
+        <span class="card-title">Get Recommendations</span>
+      </div>
+      <p class="card-desc">
+        <span class="lang-badge lang-rust">Rust · Axum</span><br><br>
+        Calls <span class="mono">/recommendations</span>. Returns ranked product suggestions with relevance scores.
+      </p>
+      <div><button class="btn btn-recommendations" onclick="doFetch(this,'recommendations','/recommendations','east-recommendations')">Fetch Recommendations</button></div>
+    </div>
+
+    <div class="euiCard">
+      <div class="card-head">
+        <div class="card-icon icon-danger">⚠</div>
+        <span class="card-title">Generate Exception</span>
+      </div>
+      <p class="card-desc">
+        <span class="lang-badge lang-python">Python · gateway</span><br><br>
+        Raises a <span class="mono">ZeroDivisionError</span> captured by the APM agent and recorded as an error transaction.
+      </p>
+      <div><button class="btn btn-danger" onclick="doFetch(this,'err','/error','east-gateway')">Trigger Error</button></div>
+    </div>
+
+    <div class="euiCard">
+      <div class="card-head">
+        <div class="card-icon icon-message">✉</div>
+        <span class="card-title">Custom Message</span>
+      </div>
+      <p class="card-desc">
+        <span class="lang-badge lang-python">Python · gateway</span><br><br>
+        Sends a custom string to APM via <span class="mono">/custom_message/{"{msg}"}</span>.
+      </p>
+      <div class="field-row">
+        <input id="msg-input" class="eui-input" type="text" placeholder="Enter a message…" value="hello from east">
+        <button class="btn btn-primary" onclick="sendMsg(this)">Send</button>
+      </div>
+    </div>
+
+  </div>
+
+  <p class="section-label">Activity</p>
+  <div class="log-panel">
+    <div class="log-toolbar">
+      <span class="log-toolbar-label">Recent events</span>
+      <button class="btn btn-ghost" style="height:28px;font-size:11px;padding:0 10px" onclick="clearLog()">Clear</button>
+    </div>
+    <div class="log-scroll" id="log-scroll">
+      <div class="log-empty" id="log-empty">No events yet — trigger an action above</div>
+    </div>
+  </div>
+
+</div>
+
+<div class="toasts" id="toasts"></div>
+
+<script>
+  function ts() {
+    return new Date().toLocaleTimeString('en-US', { hour12: false });
+  }
+
+  function fmt(data, type) {
+    if (data.error)    return '\u26a0 ' + data.error;
+    if (data.message)  return data.message;
+    if (data.products)        return data.count + ' products — first: "' + data.products[0].name + '"';
+    if (data.items)           return data.count + ' items — first: "' + data.items[0].name + '" @ $' + data.items[0].list_price;
+    if (data.reviews)         return data.count + ' reviews — latest: "' + data.reviews[0].title + '" (' + data.reviews[0].rating + '\u2605)';
+    if (data.orders)          return data.count + ' orders — latest: ' + data.orders[0].id + ' (' + data.orders[0].status + ')';
+    if (data.recommendations) return data.count + ' recommendations — top: "' + data.recommendations[0].name + '" score: ' + data.recommendations[0].score;
+    if (Array.isArray(data)) {
+      var first = data[0];
+      if (first && first.sku) return data.length + ' SKUs — "' + first.sku + '" qty: ' + first.quantity_available;
+    }
+    if (data.count !== undefined && data.items) return data.count + ' items';
+    return JSON.stringify(data).slice(0, 120);
+  }
+
+  function addLog(type, svc, text) {
+    var empty = document.getElementById('log-empty');
+    if (empty) empty.remove();
+    var row = document.createElement('div');
+    row.className = 'log-row';
+    var safeText = text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    row.innerHTML = '<span class="log-ts">' + ts() + '</span><span class="log-svc type-' + type + '">' + svc + '</span><span class="type-' + type + '">' + type + '</span><span class="log-body" title="' + safeText + '">' + safeText + '</span>';
+    document.getElementById('log-scroll').prepend(row);
+  }
+
+  function toast(msg, kind) {
+    var t = document.createElement('div');
+    t.className = 'toast' + (kind ? ' toast-' + kind : '');
+    t.textContent = msg;
+    document.getElementById('toasts').appendChild(t);
+    setTimeout(function() { t.remove(); }, 3500);
+  }
+
+  async function doFetch(btn, type, url, svc) {
+    btn.disabled = true;
+    try {
+      var res = await fetch(url);
+      var data = await res.json();
+      addLog(type, svc, fmt(data, type));
+      toast(svc + ' responded', type === 'err' ? 'err' : 'ok');
+    } catch (e) {
+      addLog('err', svc, 'Request failed: ' + e.message);
+      toast('Request failed', 'err');
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  async function sendMsg(btn) {
+    var input = document.getElementById('msg-input');
+    var msg = input.value.trim();
+    if (!msg) { toast('Enter a message first'); return; }
+    btn.disabled = true;
+    try {
+      var res = await fetch('/custom_message/' + encodeURIComponent(msg));
+      var data = await res.json();
+      addLog('msg', 'east-gateway', data.message);
+      toast('Message captured by APM', 'ok');
+    } catch (e) {
+      addLog('err', 'east-gateway', 'Request failed: ' + e.message);
+      toast('Request failed', 'err');
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  function clearLog() {
+    document.getElementById('log-scroll').innerHTML =
+      '<div class="log-empty" id="log-empty">No events yet — trigger an action above</div>';
+  }
+
+  document.getElementById('msg-input').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') document.querySelector('.btn-primary').click();
+  });
+
+  /* ── Search ── */
+  var searchMode = 'lexical';
+  var searchDebounce = null;
+
+  function setSearchMode(mode) {
+    searchMode = mode;
+    document.querySelectorAll('.search-tab').forEach(function(t) { t.classList.remove('active'); });
+    document.querySelector('.search-tab[onclick*="' + mode + '"]').classList.add('active');
+    document.getElementById('search-results').innerHTML = '';
+    document.getElementById('search-meta').textContent = '';
+    var inp = document.getElementById('search-input');
+    if (mode === 'typeahead') {
+      inp.placeholder = 'Start typing for suggestions…';
+    } else if (mode === 'asyoutype') {
+      inp.placeholder = 'Type to search as you go…';
+    } else {
+      inp.placeholder = 'Search products…';
+    }
+    inp.value = '';
+    inp.focus();
+  }
+
+  function renderResults(data) {
+    var el = document.getElementById('search-results');
+    var meta = document.getElementById('search-meta');
+    if (data.type === 'completion') {
+      var sugs = data.suggestions || [];
+      meta.textContent = sugs.length + ' suggestion' + (sugs.length !== 1 ? 's' : '') + ' · ' + (data.took_ms || 0) + 'ms · completion suggester';
+      if (!sugs.length) { el.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:8px;">No suggestions</div>'; return; }
+      el.innerHTML = sugs.map(function(s) {
+        return '<div class="suggest-item" onclick="applySuggestion(\'' + s.name.replace(/'/g,"\\'") + '\')">' +
+          '<span>' + s.name + '</span><span class="sr-cat">' + s.category + '</span></div>';
+      }).join('');
+    } else {
+      var hits = data.results || [];
+      meta.textContent = data.count + ' result' + (data.count !== 1 ? 's' : '') + ' · ' + (data.took_ms || 0) + 'ms · ' + data.type;
+      if (!hits.length) { el.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:8px;">No results</div>'; return; }
+      el.innerHTML = hits.map(function(h) {
+        return '<div class="search-result"><div><div class="sr-name">' + h.name + '</div>' +
+          '<div class="sr-desc">' + (h.description || '').slice(0, 120) + '</div></div>' +
+          '<div class="sr-right"><span class="sr-cat">' + (h.category || '') + '</span>' +
+          '<div class="sr-price">$' + (h.price || 0).toFixed(2) + '</div>' +
+          '<div class="sr-score">score: ' + (h._score || 0).toFixed(2) + '</div></div></div>';
+      }).join('');
+    }
+    addLog('search', 'search-es01', data.type + ': "' + data.query + '" → ' + (data.count || (data.suggestions || []).length) + ' hits (' + (data.took_ms || 0) + 'ms)');
+  }
+
+  function doSearch() {
+    var q = document.getElementById('search-input').value.trim();
+    if (!q) return;
+    var url = searchMode === 'typeahead' ? '/search/typeahead?q=' :
+              searchMode === 'asyoutype' ? '/search/asyoutype?q=' : '/search?q=';
+    fetch(url + encodeURIComponent(q))
+      .then(function(r) { return r.json(); })
+      .then(renderResults)
+      .catch(function(e) { document.getElementById('search-meta').textContent = 'Error: ' + e.message; });
+  }
+
+  function applySuggestion(name) {
+    document.getElementById('search-input').value = name;
+    searchMode = 'lexical';
+    setSearchMode('lexical');
+    document.getElementById('search-input').value = name;
+    doSearch();
+  }
+
+  document.getElementById('search-input').addEventListener('input', function() {
+    clearTimeout(searchDebounce);
+    if (searchMode === 'typeahead' || searchMode === 'asyoutype') {
+      searchDebounce = setTimeout(doSearch, 200);
+    }
+  });
+
+  document.getElementById('search-input').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') doSearch();
+  });
+</script>
+
+</body>
+</html>

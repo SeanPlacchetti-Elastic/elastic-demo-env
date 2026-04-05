@@ -1,0 +1,589 @@
+services:
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # FLEET + SYNTHETICS + OBSERVABILITY (all managed from cluster-east)
+  # ─────────────────────────────────────────────────────────────────────────────
+
+  # One-shot: initialises Fleet, creates the fleet-server agent policy (with
+  # fleet_server integration), creates the synthetics agent policy, creates an
+  # enrollment token for elastic-agent-synthetics, and registers the private
+  # location in Kibana Synthetics.  Runs BEFORE fleet-server so fleet-server
+  # finds its policy immediately on startup.
+  fleet-setup:
+    image: docker.elastic.co/elasticsearch/elasticsearch:${STACK_VERSION}
+    user: "0"
+    depends_on:
+      setup:
+        condition: service_healthy
+      kibana-east:
+        condition: service_healthy
+    networks:
+      - net-east
+    volumes:
+      - certs:/usr/share/elasticsearch/config/certs
+    environment:
+      - ELASTIC_PASSWORD=${ELASTIC_PASSWORD}
+    # Use list form so bash receives the script as a real argument — this lets
+    # $(...) command substitutions work.  Use $$ for shell-only variables so
+    # Docker Compose does not try to interpolate them.
+    command:
+      - bash
+      - -c
+      - |
+        set -e
+        if [ -f config/certs/tokens/agent-enrollment-token ]; then
+          echo "Tokens already present — skipping fleet-setup."
+          exit 0
+        fi
+
+        echo "=== Initialising Fleet ==="
+        until curl -sf --cacert config/certs/ca/ca.crt \
+            -u "elastic:${ELASTIC_PASSWORD}" \
+            -H "kbn-xsrf: true" \
+            -X POST "https://kibana-east:5601/api/fleet/setup" 2>/dev/null \
+            | grep -q '"isInitialized"'; do
+          echo "Fleet not ready — retrying in 10 s..."; sleep 10
+        done
+        echo "Fleet initialised."
+
+        echo "=== Creating Fleet Server agent policy (idempotent) ==="
+        EXISTING_FS=$$(curl -sf --cacert config/certs/ca/ca.crt \
+          -u "elastic:${ELASTIC_PASSWORD}" \
+          "https://kibana-east:5601/api/fleet/agent_policies" \
+          | grep -oE '"id":"[^"]*","name":"Fleet Server Policy"' | head -1 | grep -oE '^"id":"[^"]*"' | cut -d'"' -f4)
+        if [ -n "$$EXISTING_FS" ]; then
+          FS_POLICY_ID="$$EXISTING_FS"
+          echo "Re-using existing Fleet Server policy: $$FS_POLICY_ID"
+        else
+          FS_POLICY_RESP=$$(curl -sf --cacert config/certs/ca/ca.crt \
+            -u "elastic:${ELASTIC_PASSWORD}" \
+            -X POST "https://kibana-east:5601/api/fleet/agent_policies" \
+            -H "Content-Type: application/json" -H "kbn-xsrf: true" \
+            -d '{"name":"Fleet Server Policy","namespace":"default"}')
+          FS_POLICY_ID=$$(echo "$$FS_POLICY_RESP" | sed -n 's/.*"item":{"id":"\([^"]*\)".*/\1/p')
+          echo "Created Fleet Server policy: $$FS_POLICY_ID"
+        fi
+
+        echo "=== Getting fleet_server package version ==="
+        FS_VERSION=$$(curl -sf --cacert config/certs/ca/ca.crt \
+          -u "elastic:${ELASTIC_PASSWORD}" \
+          "https://kibana-east:5601/api/fleet/epm/packages/fleet_server" \
+          | grep -oE '"version":"[0-9][0-9.]*"' | head -1 | cut -d'"' -f4)
+        echo "fleet_server package version: $$FS_VERSION"
+
+        echo "=== Adding fleet_server integration to Fleet Server policy ==="
+        curl -sf --cacert config/certs/ca/ca.crt \
+          -u "elastic:${ELASTIC_PASSWORD}" \
+          -X POST "https://kibana-east:5601/api/fleet/package_policies" \
+          -H "Content-Type: application/json" -H "kbn-xsrf: true" \
+          -d "{\"name\":\"fleet-server-1\",\"policy_id\":\"$$FS_POLICY_ID\",\"namespace\":\"default\",\"enabled\":true,\"package\":{\"name\":\"fleet_server\",\"version\":\"$$FS_VERSION\"},\"inputs\":[{\"type\":\"fleet-server\",\"enabled\":true,\"streams\":[],\"vars\":{}}]}"
+        echo "Fleet Server integration added."
+
+        echo "=== Saving fleet-server policy ID ==="
+        mkdir -p config/certs/tokens
+        echo -n "$$FS_POLICY_ID" > config/certs/tokens/fleet-server-policy-id
+        chmod 640 config/certs/tokens/fleet-server-policy-id
+
+        echo "=== Creating Synthetics agent policy ==="
+        SYNTH_POLICY_RESP=$$(curl -sf --cacert config/certs/ca/ca.crt \
+          -u "elastic:${ELASTIC_PASSWORD}" \
+          -X POST "https://kibana-east:5601/api/fleet/agent_policies" \
+          -H "Content-Type: application/json" -H "kbn-xsrf: true" \
+          -d '{"name":"Synthetics Private Location","namespace":"default","monitoring_enabled":["logs","metrics"]}')
+        SYNTH_POLICY_ID=$$(echo "$$SYNTH_POLICY_RESP" | sed -n 's/.*"item":{"id":"\([^"]*\)".*/\1/p')
+        echo "Synthetics policy ID: $$SYNTH_POLICY_ID"
+
+        echo "=== Creating synthetics enrollment token ==="
+        TOKEN_RESP=$$(curl -sf --cacert config/certs/ca/ca.crt \
+          -u "elastic:${ELASTIC_PASSWORD}" \
+          -X POST "https://kibana-east:5601/api/fleet/enrollment_api_keys" \
+          -H "Content-Type: application/json" -H "kbn-xsrf: true" \
+          -d "{\"policy_id\":\"$$SYNTH_POLICY_ID\"}")
+        ENROLL_TOKEN=$$(echo "$$TOKEN_RESP" | sed -n 's/.*"api_key":"\([^"]*\)".*/\1/p')
+        echo -n "$$ENROLL_TOKEN" > config/certs/tokens/agent-enrollment-token
+        chmod 640 config/certs/tokens/agent-enrollment-token
+        echo "Synthetics enrollment token saved."
+
+        echo "=== Registering private location in Kibana Synthetics ==="
+        curl -sf --cacert config/certs/ca/ca.crt \
+          -u "elastic:${ELASTIC_PASSWORD}" \
+          -X POST "https://kibana-east:5601/api/synthetics/private_locations" \
+          -H "Content-Type: application/json" -H "kbn-xsrf: true" \
+          -d "{\"label\":\"docker-private\",\"agentPolicyId\":\"$$SYNTH_POLICY_ID\",\"tags\":[\"docker\",\"demo\"]}"
+        echo "Private location registered."
+
+        echo "=== Fixing Fleet default output to point at west-es01 ==="
+        curl -sf --cacert config/certs/ca/ca.crt \
+          -u "elastic:${ELASTIC_PASSWORD}" \
+          -X PUT "https://kibana-east:5601/api/fleet/outputs/fleet-default-output" \
+          -H "Content-Type: application/json" -H "kbn-xsrf: true" \
+          -d "{\"name\":\"default\",\"type\":\"elasticsearch\",\"hosts\":[\"https://east-es01:9200\"],\"is_default\":true,\"is_default_monitoring\":true,\"config_yaml\":\"ssl.certificate_authorities: [\\\\\\\"\/usr\/share\/elastic-agent\/certs\/ca\/ca.crt\\\\\\\"]\\nssl.verification_mode: certificate\"}"
+        echo "Fleet output updated."
+
+        echo "=== fleet-setup complete ==="
+
+  # Fleet Server — reads service token + policy ID from the certs volume
+  # (written by setup + fleet-setup respectively).
+  fleet-server:
+    image: docker.elastic.co/elastic-agent/elastic-agent:${STACK_VERSION}
+    depends_on:
+      fleet-setup:
+        condition: service_completed_successfully
+      east-es01:
+        condition: service_healthy
+    networks:
+      - net-east
+    ports:
+      - "8220:8220"
+    volumes:
+      - certs:/usr/share/elastic-agent/certs:ro
+      - fleet-server-data:/usr/share/elastic-agent/data
+    environment:
+      - FLEET_SERVER_ENABLE=1
+      - FLEET_SERVER_ELASTICSEARCH_HOST=https://east-es01:9200
+      - FLEET_SERVER_ELASTICSEARCH_CA=/usr/share/elastic-agent/certs/ca/ca.crt
+      - FLEET_SERVER_CERT=/usr/share/elastic-agent/certs/fleet-server/fleet-server.crt
+      - FLEET_SERVER_CERT_KEY=/usr/share/elastic-agent/certs/fleet-server/fleet-server.key
+      - FLEET_SERVER_PORT=8220
+      - FLEET_URL=https://fleet-server:8220
+      - FLEET_CA=/usr/share/elastic-agent/certs/ca/ca.crt
+      - CERTIFICATE_AUTHORITIES=/usr/share/elastic-agent/certs/ca/ca.crt
+    # Read the service token and pre-created policy ID from files, then hand off
+    # to the original docker-entrypoint (no -e: that would switch to enroll mode).
+    entrypoint:
+      - sh
+      - -c
+      - |
+        FLEET_SERVER_SERVICE_TOKEN=$(cat /usr/share/elastic-agent/certs/tokens/fleet-service-token)
+        FLEET_SERVER_POLICY_ID=$(cat /usr/share/elastic-agent/certs/tokens/fleet-server-policy-id)
+        export FLEET_SERVER_SERVICE_TOKEN FLEET_SERVER_POLICY_ID
+        exec /usr/bin/tini -- /usr/local/bin/docker-entrypoint
+    healthcheck:
+      test:
+        - "CMD-SHELL"
+        - "curl -sf --cacert /usr/share/elastic-agent/certs/ca/ca.crt https://localhost:8220/api/status | grep -q HEALTHY"
+      interval: 15s
+      timeout: 10s
+      retries: 20
+      start_period: 120s
+
+  # Elastic Agent (complete image) enrolled as the docker-private synthetics location
+  elastic-agent-synthetics:
+    image: docker.elastic.co/elastic-agent/elastic-agent-complete:${STACK_VERSION}
+    depends_on:
+      fleet-server:
+        condition: service_healthy
+    networks:
+      - net-east
+    user: root
+    cap_add:
+      - NET_ADMIN
+      - SYS_ADMIN
+    volumes:
+      - certs:/usr/share/elastic-agent/certs:ro
+      - agent-synthetics-data:/usr/share/elastic-agent/data
+    environment:
+      - FLEET_ENROLL=1
+      - FLEET_URL=https://fleet-server:8220
+      - FLEET_CA=/usr/share/elastic-agent/certs/ca/ca.crt
+      - CERTIFICATE_AUTHORITIES=/usr/share/elastic-agent/certs/ca/ca.crt
+    entrypoint:
+      - sh
+      - -c
+      - |
+        FLEET_ENROLLMENT_TOKEN=$(cat /usr/share/elastic-agent/certs/tokens/agent-enrollment-token)
+        export FLEET_ENROLLMENT_TOKEN
+        exec /usr/bin/tini -- /usr/local/bin/docker-entrypoint -e
+
+  # One-shot: installs the synthetics integration on the Synthetics Private
+  # Location agent policy and creates HTTP + browser synthetic monitors that run
+  # from within the Docker network via the docker-private private location.
+  # Idempotent — skips if the sentinel file already exists.
+  synthetics-setup:
+    image: docker.elastic.co/elasticsearch/elasticsearch:${STACK_VERSION}
+    user: "0"
+    depends_on:
+      elastic-agent-synthetics:
+        condition: service_started
+      kibana-east:
+        condition: service_healthy
+    networks:
+      - net-east
+    volumes:
+      - certs:/usr/share/elasticsearch/config/certs
+    environment:
+      - ELASTIC_PASSWORD=${ELASTIC_PASSWORD}
+    command:
+      - bash
+      - -c
+      - |
+        set -e
+        CA="config/certs/ca/ca.crt"
+        KB="https://kibana-east:5601"
+
+        if [ -f config/certs/tokens/synthetics-monitors-created ]; then
+          echo "Synthetics monitors already created — skipping."; exit 0
+        fi
+
+        echo "=== Waiting for Kibana ==="
+        until curl -sf --cacert $$CA -u "elastic:${ELASTIC_PASSWORD}" \
+            "$$KB/api/status" 2>/dev/null | grep -q '"level":"available"'; do
+          echo "Kibana not ready, retrying in 15s..."; sleep 15
+        done
+
+        echo "=== Getting synthetics agent policy ID ==="
+        SYNTH_POLICY_ID=$$(curl -sf --cacert $$CA -u "elastic:${ELASTIC_PASSWORD}" \
+          "$$KB/api/fleet/agent_policies?perPage=100" \
+          | grep -oE '"id":"[^"]*","name":"Synthetics Private Location"' \
+          | head -1 | grep -oE '"id":"[^"]*"' | cut -d'"' -f4)
+        echo "Synthetics policy ID: $$SYNTH_POLICY_ID"
+
+        if [ -n "$$SYNTH_POLICY_ID" ]; then
+          echo "=== Ensuring synthetics integration is installed on policy ==="
+          SYNTH_VER=$$(curl -sf --cacert $$CA -u "elastic:${ELASTIC_PASSWORD}" \
+            "$$KB/api/fleet/epm/packages/synthetics" \
+            | grep -oE '"version":"[0-9][0-9.]*"' | head -1 | cut -d'"' -f4)
+          echo "Synthetics package version: $$SYNTH_VER"
+          curl -s --cacert $$CA -u "elastic:${ELASTIC_PASSWORD}" \
+            -X POST "$$KB/api/fleet/package_policies" \
+            -H "Content-Type: application/json" -H "kbn-xsrf: true" \
+            -d "{\"name\":\"synthetics-runner\",\"policy_id\":\"$$SYNTH_POLICY_ID\",\"namespace\":\"default\",\"enabled\":true,\"package\":{\"name\":\"synthetics\",\"version\":\"$$SYNTH_VER\"},\"inputs\":[]}" \
+            > /dev/null || echo "  (synthetics integration may already be installed)"
+        fi
+
+        echo "=== Waiting for enrolled synthetics agent ==="
+        for i in $$(seq 1 20); do
+          AGENTS=$$(curl -sf --cacert $$CA -u "elastic:${ELASTIC_PASSWORD}" \
+            "$$KB/api/fleet/agents?perPage=100" 2>/dev/null || echo "")
+          echo "$$AGENTS" | grep -q '"active":true' && { echo "Agent enrolled."; break; }
+          [ $$i -eq 20 ] && { echo "Timeout waiting for active agent."; exit 1; }
+          echo "  Waiting ($$i/20)..."; sleep 15
+        done
+
+        echo "=== Getting private location ID ==="
+        LOC_RESP=$$(curl -sf --cacert $$CA -u "elastic:${ELASTIC_PASSWORD}" \
+          "$$KB/api/synthetics/private_locations" 2>/dev/null || echo "")
+        LOC_ID=$$(echo "$$LOC_RESP" | grep -oE '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
+        echo "Private location ID: $$LOC_ID"
+        [ -z "$$LOC_ID" ] && { echo "No private location found — cannot create monitors."; exit 1; }
+
+        echo "=== Writing browser journey scripts to /tmp ==="
+
+        # ── Journey 1: Customer Shopping Journey (East Gateway) ───────────────
+        # A shopper loads the gateway UI and clicks through every downstream
+        # service: Catalog (Java) → Inventory (Go) → Pricing (.NET) →
+        # Reviews (PHP) → Recommendations (Rust) → Orders (Ruby).
+        # Each step generates a distributed APM trace spanning all 7 languages.
+        EAST_SCRIPT=$'step(\'Load storefront\', async () => {\n  await page.goto(params.url);\n  await page.locator(\'h1.page-title\').waitFor({ timeout: 10000 });\n});\n\nstep(\'Browse product catalog (Java)\', async () => {\n  const respPromise = page.waitForResponse(r => r.url().includes(\'/catalog\'));\n  await page.locator(\'button.btn-catalog\').click();\n  await respPromise;\n});\n\nstep(\'Check inventory levels (Go)\', async () => {\n  const respPromise = page.waitForResponse(r => r.url().includes(\'/inventory\'));\n  await page.locator(\'button.btn-inventory\').click();\n  await respPromise;\n});\n\nstep(\'Compare prices (.NET)\', async () => {\n  const respPromise = page.waitForResponse(r => r.url().includes(\'/pricing\'));\n  await page.locator(\'button.btn-pricing\').click();\n  await respPromise;\n});\n\nstep(\'Read customer reviews (PHP)\', async () => {\n  const respPromise = page.waitForResponse(r => r.url().includes(\'/reviews\'));\n  await page.locator(\'button.btn-reviews\').click();\n  await respPromise;\n});\n\nstep(\'Get recommendations (Rust)\', async () => {\n  const respPromise = page.waitForResponse(r => r.url().includes(\'/recommendations\'));\n  await page.locator(\'button.btn-recommendations\').click();\n  await respPromise;\n});\n\nstep(\'Review order history (Ruby)\', async () => {\n  const respPromise = page.waitForResponse(r => r.url().includes(\'/orders\'));\n  await page.locator(\'button.btn-orders\').click();\n  await respPromise;\n  const rows = await page.locator(\'#log-scroll .log-row\').count();\n  if (rows < 6) throw new Error(\'Expected at least 6 activity log rows, got \' + rows);\n});'
+        printf '%s\n' "$$EAST_SCRIPT" > /tmp/east-journey.js
+
+        # ── Journey 2: APM Error Tracking & Custom Events (West Webapp) ───────
+        # A QA engineer verifies APM instrumentation: triggers a ZeroDivisionError
+        # to confirm APM error capture is working, then sends a custom tagged
+        # message to verify custom event ingestion.
+        WEST_SCRIPT=$'step(\'Load APM demo\', async () => {\n  await page.goto(params.url);\n  await page.locator(\'h1.page-title\').waitFor({ timeout: 10000 });\n});\n\nstep(\'Trigger ZeroDivisionError (APM error capture)\', async () => {\n  const respPromise = page.waitForResponse(r => r.url().includes(\'/error\'));\n  await page.locator(\'button.btn-danger\').click();\n  await respPromise;\n});\n\nstep(\'Send custom APM message\', async () => {\n  await page.locator(\'#msg-input\').fill(\'synthetic-monitor-check\');\n  const respPromise = page.waitForResponse(r => r.url().includes(\'/custom_message\'));\n  await page.locator(\'button.btn-primary\').click();\n  await respPromise;\n  const rows = await page.locator(\'#log-scroll .log-row\').count();\n  if (rows < 2) throw new Error(\'Expected at least 2 log entries, got \' + rows);\n});'
+        printf '%s\n' "$$WEST_SCRIPT" > /tmp/west-journey.js
+
+        # ── Journey 3: Demo Launchpad Health Check (Landing Page) ─────────────
+        # Periodic check that the landing page loads, both Kibana cluster links
+        # are present, the east gateway link is listed, and the demo description
+        # section is intact.
+        LAND_SCRIPT=$'step(\'Load demo launchpad\', async () => {\n  await page.goto(params.url);\n  await page.locator(\'h1\').waitFor({ timeout: 10000 });\n});\n\nstep(\'Verify Kibana cluster links present\', async () => {\n  await page.locator(\'a[href="https://localhost:5601"]\').waitFor({ timeout: 5000 });\n  await page.locator(\'a[href="https://localhost:5602"]\').waitFor({ timeout: 5000 });\n});\n\nstep(\'Verify east gateway link and demo description\', async () => {\n  await page.locator(\'a[href="https://localhost:8001"]\').waitFor({ timeout: 5000 });\n  await page.locator(\'h2:has-text("What this demo covers")\').waitFor({ timeout: 5000 });\n});'
+        printf '%s\n' "$$LAND_SCRIPT" > /tmp/land-journey.js
+
+        echo "=== Posting browser monitors ==="
+        post_browser() {
+          local mon_name="$$1" mon_url="$$2" script_file="$$3" sched="$$4"
+          # JSON-escape the script: backslash → \\, double-quote → \", newline → \n, tab → \t
+          ESCAPED=$$(sed 's/\\/\\\\/g; s/"/\\"/g' "$$script_file" | awk '{printf "%s\\n",$0}' | sed 's/\\n$$//')
+          printf '{"name":"%s","type":"browser","schedule":{"number":"%s","unit":"m"},"enabled":true,"locations":[{"id":"%s","isServiceManaged":false}],"source":{"inline":{"script":"%s"}},"params":{"url":"%s"},"playwright_options":{"ignoreHTTPSErrors":true}}\n' \
+            "$$mon_name" "$$sched" "$$LOC_ID" "$$ESCAPED" "$$mon_url" > /tmp/monitor.json
+          curl -sf --cacert $$CA -u "elastic:${ELASTIC_PASSWORD}" \
+            -X POST "$$KB/api/synthetics/monitors" \
+            -H "Content-Type: application/json" -H "kbn-xsrf: true" \
+            --data @/tmp/monitor.json > /dev/null \
+            && echo "  + $$mon_name" || echo "  - $$mon_name (may already exist)"
+        }
+
+        post_browser "cluster-east | Customer Shopping Journey [browser]"            "https://east-gateway:8000/"  /tmp/east-journey.js 10
+        post_browser "cluster-west | APM Error Tracking and Custom Events [browser]" "https://west-webapp:8000/"   /tmp/west-journey.js 15
+        post_browser "shared | Demo Launchpad Health Check [browser]"                "https://landing/"            /tmp/land-journey.js 20
+
+        touch config/certs/tokens/synthetics-monitors-created
+        echo "=== synthetics-setup complete ==="
+
+  # Heartbeat synthetic monitoring — hits both webapps every 15s (/error) and 30s (/)
+  heartbeat:
+    depends_on:
+      east-es01:
+        condition: service_healthy
+      kibana-east:
+        condition: service_healthy
+    image: docker.elastic.co/beats/heartbeat:${STACK_VERSION}
+    user: root
+    networks:
+      - net-west
+      - net-east
+    volumes:
+      - certs:/usr/share/heartbeat/certs
+      - heartbeatdata:/usr/share/heartbeat/data
+      - "../config/heartbeat.yml:/usr/share/heartbeat/heartbeat.yml:ro"
+    environment:
+      - ELASTIC_USER=elastic
+      - ELASTIC_PASSWORD=${ELASTIC_PASSWORD}
+      - ELASTIC_HOSTS=https://east-es01:9200
+      - KIBANA_HOSTS=https://kibana-east:5601
+      - CA_CERT=certs/ca/ca.crt
+    command: ["heartbeat", "-e", "--strict.perms=false"]
+
+  # ── Traffic generator ────────────────────────────────────────────────────────
+  # Continuously hits all service endpoints to generate a steady stream of APM
+  # transactions and logs.  The services themselves produce time-based anomalies;
+  # loadgen provides the traffic that makes those anomalies visible in ML and APM.
+  loadgen:
+    image: alpine/curl:latest
+    networks:
+      - net-east
+    volumes:
+      - certs:/usr/share/certs:ro
+      - "../loadgen/loadgen.sh:/loadgen.sh:ro"
+    entrypoint: ["/bin/sh", "/loadgen.sh"]
+    environment:
+      - DEV_GATEWAY_URL=https://east-gateway:8000
+      - PROD_GATEWAY_URL=https://prod-gateway:8000
+      - WEST_WEBAPP_URL=https://west-webapp:8000
+      - LOADGEN_INTERVAL=3
+    depends_on:
+      - west-webapp
+      - east-gateway
+      - prod-gateway
+    restart: unless-stopped
+
+  # ── ML anomaly detection setup ──────────────────────────────────────────────
+  # One-shot: creates and starts ML anomaly detection jobs for APM latency and
+  # error rate.  Idempotent — uses a sentinel file on the certs volume.
+  ml-setup:
+    image: docker.elastic.co/elasticsearch/elasticsearch:${STACK_VERSION}
+    user: "0"
+    depends_on:
+      kibana-east:
+        condition: service_healthy
+    networks:
+      - net-east
+    volumes:
+      - certs:/usr/share/elasticsearch/config/certs
+    environment:
+      - ELASTIC_PASSWORD=${ELASTIC_PASSWORD}
+    command:
+      - bash
+      - -c
+      - |
+        set -e
+        CA="config/certs/ca/ca.crt"
+        ES="https://east-es01:9200"
+        KB="https://kibana-east:5601"
+
+        if [ -f config/certs/tokens/ml-jobs-created ]; then
+          echo "ML jobs already created — skipping."; exit 0
+        fi
+
+        echo "=== Waiting for Elasticsearch ==="
+        until curl -sf --cacert $$CA -u "elastic:${ELASTIC_PASSWORD}" "$$ES/_cluster/health" | grep -qE '"status":"(green|yellow)"'; do
+          echo "  ES not ready..."; sleep 15
+        done
+
+        # Helper: create job, then its datafeed, then open+start
+        create_ml() {
+          local JOB_ID="$$1" JOB_JSON="$$2" FEED_JSON="$$3"
+          echo "--- Creating job: $$JOB_ID ---"
+          curl -sf --cacert $$CA -u "elastic:${ELASTIC_PASSWORD}" \
+            -X PUT "$$ES/_ml/anomaly_detectors/$$JOB_ID" \
+            -H "Content-Type: application/json" -d "$$JOB_JSON" > /dev/null \
+            && echo "  Job created" || { echo "  Job may already exist"; }
+          curl -sf --cacert $$CA -u "elastic:${ELASTIC_PASSWORD}" \
+            -X PUT "$$ES/_ml/datafeeds/datafeed-$$JOB_ID" \
+            -H "Content-Type: application/json" -d "$$FEED_JSON" > /dev/null \
+            && echo "  Datafeed created" || { echo "  Datafeed may already exist"; }
+          curl -sf --cacert $$CA -u "elastic:${ELASTIC_PASSWORD}" \
+            -X POST "$$ES/_ml/anomaly_detectors/$$JOB_ID/_open" \
+            -H "Content-Type: application/json" > /dev/null \
+            && echo "  Job opened" || echo "  Job may already be open"
+          curl -sf --cacert $$CA -u "elastic:${ELASTIC_PASSWORD}" \
+            -X POST "$$ES/_ml/datafeeds/datafeed-$$JOB_ID/_start" \
+            -H "Content-Type: application/json" > /dev/null \
+            && echo "  Datafeed started" || echo "  Datafeed may already be running"
+        }
+
+        echo "=== Creating ML anomaly detection jobs ==="
+        create_ml "demo-apm-error-rate" \
+          '{"description":"Detects unusual error rates per service","analysis_config":{"bucket_span":"5m","detectors":[{"function":"high_count","partition_field_name":"service.name"}],"influencers":["service.name"]},"analysis_limits":{"model_memory_limit":"25mb"},"data_description":{"time_field":"@timestamp"},"model_plot_config":{"enabled":true,"annotations_enabled":true},"results_index_name":"custom-demo-ml"}' \
+          '{"job_id":"demo-apm-error-rate","indices":["traces-apm*","logs-apm*"],"query":{"bool":{"filter":[{"term":{"event.outcome":"failure"}}]}}}'
+
+        create_ml "demo-latency-outliers" \
+          '{"description":"Detects services with unusually high transaction durations","analysis_config":{"bucket_span":"5m","detectors":[{"function":"high_mean","field_name":"transaction.duration.us","partition_field_name":"service.name"}],"influencers":["service.name","transaction.type"]},"analysis_limits":{"model_memory_limit":"30mb"},"data_description":{"time_field":"@timestamp"},"model_plot_config":{"enabled":true,"annotations_enabled":true},"results_index_name":"custom-demo-ml"}' \
+          '{"job_id":"demo-latency-outliers","indices":["traces-apm*"],"query":{"bool":{"filter":[{"term":{"processor.event":"transaction"}}]}}}'
+
+        create_ml "demo-log-rate" \
+          '{"description":"Detects unusual warning/error log rates per service","analysis_config":{"bucket_span":"5m","detectors":[{"function":"high_count","partition_field_name":"service.name"}],"influencers":["service.name","log.level"]},"analysis_limits":{"model_memory_limit":"25mb"},"data_description":{"time_field":"@timestamp"},"model_plot_config":{"enabled":true,"annotations_enabled":true},"results_index_name":"custom-demo-ml"}' \
+          '{"job_id":"demo-log-rate","indices":["filebeat-*"],"query":{"bool":{"filter":[{"exists":{"field":"service.name"}},{"terms":{"log.level":["error","warn","warning"]}}]}}}'
+
+        mkdir -p config/certs/tokens
+        touch config/certs/tokens/ml-jobs-created
+        echo "=== ml-setup complete ==="
+
+  # ── Alert setup (west NOC cluster watching east via CCS) ─────────────────────
+  # One-shot: creates alerting rules in kibana-west that query east cluster data
+  # via CCS.  These fire when east services degrade, demonstrating cross-cluster
+  # alerting from an operations/NOC cluster.
+  alert-setup:
+    image: docker.elastic.co/elasticsearch/elasticsearch:${STACK_VERSION}
+    user: "0"
+    depends_on:
+      kibana-west:
+        condition: service_healthy
+    networks:
+      - net-west
+    volumes:
+      - certs:/usr/share/elasticsearch/config/certs
+    environment:
+      - ELASTIC_PASSWORD=${ELASTIC_PASSWORD}
+    command:
+      - bash
+      - -c
+      - |
+        set -e
+        CA="config/certs/ca/ca.crt"
+        KB="https://kibana-west:5601"
+
+        if [ -f config/certs/tokens/alerts-created ]; then
+          echo "Alerts already created — skipping."; exit 0
+        fi
+
+        echo "=== Waiting for Kibana-West ==="
+        until curl -sf --cacert $$CA -u "elastic:${ELASTIC_PASSWORD}" \
+            "$$KB/api/status" 2>/dev/null | grep -q '"level":"available"'; do
+          echo "  Kibana not ready..."; sleep 15
+        done
+
+        echo "=== Verifying CCS connectivity ==="
+        until curl -sf --cacert $$CA -u "elastic:${ELASTIC_PASSWORD}" \
+            "https://west-es01:9200/_remote/info" 2>/dev/null | grep -q '"connected":true'; do
+          echo "  CCS not connected..."; sleep 15
+        done
+        echo "CCS to cluster-east confirmed."
+
+        echo "=== Creating cross-cluster data view in west Kibana ==="
+        curl -sf --cacert $$CA -u "elastic:${ELASTIC_PASSWORD}" \
+          -X POST "$$KB/api/data_views/data_view" \
+          -H "Content-Type: application/json" -H "kbn-xsrf: true" \
+          -d '{"data_view":{"title":"cluster-east:traces-apm*","name":"East APM Traces (CCS)","timeFieldName":"@timestamp"}}' \
+          > /dev/null && echo "  + East APM Traces data view" || echo "  (may already exist)"
+
+        curl -sf --cacert $$CA -u "elastic:${ELASTIC_PASSWORD}" \
+          -X POST "$$KB/api/data_views/data_view" \
+          -H "Content-Type: application/json" -H "kbn-xsrf: true" \
+          -d '{"data_view":{"title":"cluster-east:filebeat-*","name":"East Filebeat Logs (CCS)","timeFieldName":"@timestamp"}}' \
+          > /dev/null && echo "  + East Filebeat data view" || echo "  (may already exist)"
+
+        curl -sf --cacert $$CA -u "elastic:${ELASTIC_PASSWORD}" \
+          -X POST "$$KB/api/data_views/data_view" \
+          -H "Content-Type: application/json" -H "kbn-xsrf: true" \
+          -d '{"data_view":{"title":"cluster-east:heartbeat-*","name":"East Heartbeat Uptime (CCS)","timeFieldName":"@timestamp"}}' \
+          > /dev/null && echo "  + East Heartbeat data view" || echo "  (may already exist)"
+
+        echo "=== Creating alerting rules ==="
+        # Alert 1: High error rate on east microservices (Elasticsearch query rule)
+        curl -sf --cacert $$CA -u "elastic:${ELASTIC_PASSWORD}" \
+          -X POST "$$KB/api/alerting/rule" \
+          -H "Content-Type: application/json" -H "kbn-xsrf: true" \
+          -d '{
+            "name": "East Microservices — High Error Rate",
+            "rule_type_id": ".es-query",
+            "consumer": "alerts",
+            "schedule": {"interval": "5m"},
+            "params": {
+              "searchType": "esQuery",
+              "timeWindowSize": 5,
+              "timeWindowUnit": "m",
+              "threshold": [5],
+              "thresholdComparator": ">",
+              "size": 10,
+              "esQuery": "{\"query\":{\"bool\":{\"filter\":[{\"term\":{\"event.outcome\":\"failure\"}}]}}}",
+              "index": ["cluster-east:traces-apm*"],
+              "timeField": "@timestamp"
+            },
+            "actions": [],
+            "tags": ["ccs", "east-production", "error-rate"],
+            "enabled": true
+          }' > /dev/null && echo "  + High Error Rate alert" || echo "  (may already exist)"
+
+        # Alert 2: East service degraded logs (watches for scenario=degraded in logs)
+        curl -sf --cacert $$CA -u "elastic:${ELASTIC_PASSWORD}" \
+          -X POST "$$KB/api/alerting/rule" \
+          -H "Content-Type: application/json" -H "kbn-xsrf: true" \
+          -d '{
+            "name": "East Microservices — Degraded Mode Detected",
+            "rule_type_id": ".es-query",
+            "consumer": "alerts",
+            "schedule": {"interval": "5m"},
+            "params": {
+              "searchType": "esQuery",
+              "timeWindowSize": 5,
+              "timeWindowUnit": "m",
+              "threshold": [3],
+              "thresholdComparator": ">",
+              "size": 10,
+              "esQuery": "{\"query\":{\"bool\":{\"filter\":[{\"term\":{\"scenario\":\"degraded\"}},{\"terms\":{\"log.level\":[\"error\",\"warn\",\"warning\"]}}]}}}",
+              "index": ["cluster-east:filebeat-*"],
+              "timeField": "@timestamp"
+            },
+            "actions": [],
+            "tags": ["ccs", "east-production", "degraded"],
+            "enabled": true
+          }' > /dev/null && echo "  + Degraded Mode alert" || echo "  (may already exist)"
+
+        # Alert 3: East service health check failure (heartbeat)
+        curl -sf --cacert $$CA -u "elastic:${ELASTIC_PASSWORD}" \
+          -X POST "$$KB/api/alerting/rule" \
+          -H "Content-Type: application/json" -H "kbn-xsrf: true" \
+          -d '{
+            "name": "East Microservices — Health Check Failure",
+            "rule_type_id": ".es-query",
+            "consumer": "alerts",
+            "schedule": {"interval": "2m"},
+            "params": {
+              "searchType": "esQuery",
+              "timeWindowSize": 2,
+              "timeWindowUnit": "m",
+              "threshold": [1],
+              "thresholdComparator": ">",
+              "size": 5,
+              "esQuery": "{\"query\":{\"bool\":{\"filter\":[{\"term\":{\"monitor.status\":\"down\"}}]}}}",
+              "index": ["cluster-east:heartbeat-*"],
+              "timeField": "@timestamp"
+            },
+            "actions": [],
+            "tags": ["ccs", "east-production", "uptime"],
+            "enabled": true
+          }' > /dev/null && echo "  + Health Check Failure alert" || echo "  (may already exist)"
+
+        mkdir -p config/certs/tokens
+        touch config/certs/tokens/alerts-created
+        echo "=== alert-setup complete ==="
+
+  # ── Landing page ─────────────────────────────────────────────────────────────
+  # Nginx with error_page 497 to redirect HTTP→HTTPS on the same port.
+  landing:
+    image: nginx:alpine
+    ports:
+      - "8080:443"
+    volumes:
+      - ../html:/usr/share/nginx/html:ro
+      - certs:/usr/share/certs:ro
+      - "../config/landing-nginx.conf:/etc/nginx/conf.d/default.conf:ro"
+    networks:
+      - net-east
+    depends_on:
+      setup:
+        condition: service_healthy
+    restart: unless-stopped

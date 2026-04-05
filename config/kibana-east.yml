@@ -1,0 +1,7 @@
+server.host: "0.0.0.0"
+telemetry.enabled: "true"
+elastic:
+  apm:
+    active: true
+    serverUrl: "http://east-apm-server:8200"
+    secretToken: ${ELASTIC_APM_SECRET_TOKEN}

@@ -1,0 +1,6 @@
+elastic:
+  apm:
+    active: false
+    contextPropagationOnly: false
+server.host: "0.0.0.0"
+telemetry.enabled: "true"

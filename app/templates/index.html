@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ service_name }}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg:           #fafbfd;
+      --surface:      #fff;
+      --subdued-bg:   #F5F7FA;
+      --text:         #343741;
+      --text-subdued: #69707D;
+      --text-muted:   #98A2B3;
+      --border:       #D3DAE6;
+      --primary:      #07C;
+      --primary-hover:#006BB4;
+      --success:      #00BFB3;
+      --warning:      #FEC514;
+      --danger:       #BD271E;
+      --danger-hover: #A8231A;
+      --accent:       #F04E98;
+      --radius:       6px;
+      --font: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: var(--font);
+      background: var(--bg);
+      color: var(--text);
+      font-size: 14px;
+      line-height: 1.5;
+      min-height: 100vh;
+    }
+
+    /* ── Top bar ── */
+    .euiHeader {
+      height: 48px;
+      background: #343741;
+      display: flex;
+      align-items: center;
+      padding: 0 24px;
+      gap: 12px;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      box-shadow: 0 1px 2px rgba(0,0,0,.15);
+    }
+    .logo-mark {
+      width: 28px; height: 28px; border-radius: var(--radius); flex-shrink: 0;
+      background: linear-gradient(135deg, #F04E98 0%, #07C 100%);
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 700; font-size: 13px; color: #fff;
+    }
+    .euiHeader-name { font-size: 14px; font-weight: 600; color: #fff; flex: 1; }
+    .pill {
+      font-size: 11px; font-weight: 600; letter-spacing: .04em;
+      padding: 3px 10px; border-radius: 20px;
+    }
+    .pill-west  { background: rgba(0,119,204,.15); color: #07C; }
+    .pill-east  { background: rgba(0,191,179,.15); color: #00BFB3; }
+    .pill-plain {
+      background: rgba(255,255,255,.12);
+      border: 1px solid rgba(255,255,255,.18);
+      color: rgba(255,255,255,.7);
+      font-weight: 500;
+    }
+
+    /* ── Layout ── */
+    .euiPage { max-width: 960px; margin: 0 auto; padding: 32px 24px 64px; }
+
+    /* ── Page header ── */
+    .euiTitle { font-size: 22px; font-weight: 700; color: var(--text); margin-bottom: 6px; }
+    .euiText--subdued { font-size: 13px; color: var(--text-subdued); margin-bottom: 28px; }
+
+    /* ── Info strip ── */
+    .euiPanel--info {
+      display: flex; flex-wrap: wrap; gap: 0;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      margin-bottom: 32px;
+      overflow: hidden;
+      box-shadow: 0 1px 3px rgba(0,0,0,.04);
+    }
+    .info-cell {
+      flex: 1; min-width: 160px;
+      padding: 14px 20px;
+      border-right: 1px solid var(--border);
+    }
+    .info-cell:last-child { border-right: none; }
+    .info-cell dt {
+      font-size: 10px; font-weight: 700; letter-spacing: .08em;
+      text-transform: uppercase; color: var(--text-muted); margin-bottom: 4px;
+    }
+    .info-cell dd { font-size: 13px; color: var(--text); font-family: monospace; }
+    .dot-live { color: var(--success); }
+
+    /* ── Section label ── */
+    .euiTitle--xxs {
+      font-size: 11px; font-weight: 700; letter-spacing: .08em;
+      text-transform: uppercase; color: var(--text-muted);
+      padding-bottom: 8px; border-bottom: 1px solid var(--border);
+      margin-bottom: 16px;
+    }
+
+    /* ── Cards ── */
+    .euiFlexGrid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 16px;
+      margin-bottom: 32px;
+    }
+    .euiPanel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+      display: flex; flex-direction: column; gap: 12px;
+      box-shadow: 0 1px 3px rgba(0,0,0,.04);
+    }
+    .euiPanel-head { display: flex; align-items: center; gap: 10px; }
+    .euiPanel-icon {
+      width: 34px; height: 34px; border-radius: var(--radius); flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center; font-size: 15px;
+    }
+    .icon-danger  { background: #FDE8E6; color: var(--danger); }
+    .icon-message { background: #E6F1FA; color: var(--primary); }
+    .euiPanel-title { font-size: 14px; font-weight: 600; color: var(--text); }
+    .euiPanel-desc  { font-size: 12px; color: var(--text-subdued); line-height: 1.6; }
+    .mono {
+      background: var(--subdued-bg); border: 1px solid var(--border);
+      border-radius: 3px; padding: 1px 5px;
+      font-size: 11px; color: var(--primary); font-family: monospace;
+    }
+
+    /* ── Input + button row ── */
+    .field-row { display: flex; gap: 8px; }
+    .eui-input {
+      flex: 1; min-width: 0;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      color: var(--text);
+      font-family: var(--font);
+      font-size: 14px;
+      padding: 0 12px;
+      height: 38px;
+      outline: none;
+      transition: border-color .15s, box-shadow .15s;
+    }
+    .eui-input:focus { border-color: var(--primary); box-shadow: 0 0 0 1px var(--primary); }
+    .eui-input::placeholder { color: var(--text-muted); }
+
+    /* ── Buttons ── */
+    .euiButton {
+      display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+      height: 38px; padding: 0 18px;
+      border: none; border-radius: var(--radius);
+      font-family: var(--font); font-size: 13px; font-weight: 600;
+      cursor: pointer; white-space: nowrap;
+      transition: background .12s, opacity .12s, box-shadow .12s;
+    }
+    .euiButton:disabled { opacity: .45; cursor: not-allowed; }
+    .btn-danger  { background: var(--danger); color: #fff; }
+    .btn-danger:hover:not(:disabled)  { background: var(--danger-hover); }
+    .btn-primary { background: var(--primary); color: #fff; }
+    .btn-primary:hover:not(:disabled) { background: var(--primary-hover); }
+    .btn-ghost {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text-subdued);
+    }
+    .btn-ghost:hover:not(:disabled) { background: var(--subdued-bg); color: var(--text); }
+
+    /* ── Activity log ── */
+    .euiPanel--log {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      box-shadow: 0 1px 3px rgba(0,0,0,.04);
+    }
+    .log-toolbar {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 10px 16px;
+      border-bottom: 1px solid var(--border);
+      background: var(--subdued-bg);
+    }
+    .log-toolbar-label { font-size: 12px; font-weight: 600; color: var(--text-subdued); }
+    .log-scroll { min-height: 128px; max-height: 300px; overflow-y: auto; }
+    .log-empty {
+      height: 128px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 13px; color: var(--text-muted);
+    }
+    .log-row {
+      display: grid;
+      grid-template-columns: 76px 68px 1fr;
+      gap: 12px; align-items: baseline;
+      padding: 9px 16px;
+      border-bottom: 1px solid var(--subdued-bg);
+      font-size: 12px;
+      animation: popIn .18s ease;
+    }
+    .log-row:hover { background: var(--subdued-bg); }
+    @keyframes popIn { from { opacity: 0; transform: translateY(-3px); } to { opacity: 1; } }
+    .log-ts   { color: var(--text-muted); font-family: monospace; }
+    .type-err { color: var(--danger); font-weight: 700; }
+    .type-msg { color: var(--primary); font-weight: 700; }
+    .log-body { color: var(--text); }
+    .log-scroll::-webkit-scrollbar { width: 5px; }
+    .log-scroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+    /* ── Toasts ── */
+    .toasts {
+      position: fixed; bottom: 24px; right: 24px;
+      display: flex; flex-direction: column; gap: 8px;
+      z-index: 100; pointer-events: none;
+    }
+    .toast {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--primary);
+      border-radius: var(--radius);
+      padding: 10px 16px;
+      font-size: 13px; color: var(--text);
+      pointer-events: all;
+      animation: slideIn .2s ease;
+      max-width: 300px;
+      box-shadow: 0 4px 12px rgba(0,0,0,.08);
+    }
+    .toast-err  { border-left-color: var(--danger); }
+    .toast-ok   { border-left-color: var(--success); }
+    @keyframes slideIn { from { opacity:0; transform: translateX(16px); } to { opacity:1; } }
+  </style>
+  <!-- Elastic RUM agent — sends browser-side performance and user interaction
+       data to the APM server. Complements server-side APM traces with
+       real user timing, page load spans, and JS error capture. -->
+  <script src="https://unpkg.com/@elastic/apm-rum@5/dist/bundles/elastic-apm-rum.umd.min.js" crossorigin></script>
+  <script>
+    window.__elasticApmRum = elasticApm.init({
+      serviceName: '{{ service_name }}-rum',
+      serverUrl:   '{{ rum_server_url }}',
+      environment: '{{ environment }}',
+      serviceVersion: '1.0.0',
+      distributedTracing: true,
+      distributedTracingOrigins: [window.location.origin],
+      pageLoadTransactionName: window.location.pathname,
+    });
+  </script>
+</head>
+<body>
+
+<div class="euiHeader">
+  <div class="logo-mark">E</div>
+  <span class="euiHeader-name">{{ service_name }}</span>
+  {% if 'west' in service_name %}
+    <span class="pill pill-west">cluster-west</span>
+  {% elif 'east' in service_name %}
+    <span class="pill pill-east">cluster-east</span>
+  {% endif %}
+  <span class="pill pill-plain">{{ environment }}</span>
+</div>
+
+<div class="euiPage">
+
+  <h1 class="euiTitle">APM Demo</h1>
+  <p class="euiText--subdued">Trigger APM events from this service and observe them in Elastic APM. Each action generates a transaction, captured exception, or custom message event.</p>
+
+  <dl class="euiPanel--info">
+    <div class="info-cell">
+      <dt>Service</dt>
+      <dd>{{ service_name }}</dd>
+    </div>
+    <div class="info-cell">
+      <dt>Environment</dt>
+      <dd>{{ environment }}</dd>
+    </div>
+    <div class="info-cell">
+      <dt>APM Server</dt>
+      <dd>{{ apm_server_url }}</dd>
+    </div>
+    <div class="info-cell">
+      <dt>Status</dt>
+      <dd><span class="dot-live">●</span> live</dd>
+    </div>
+  </dl>
+
+  <p class="euiTitle--xxs">Actions</p>
+  <div class="euiFlexGrid">
+
+    <div class="euiPanel">
+      <div class="euiPanel-head">
+        <div class="euiPanel-icon icon-danger">⚠</div>
+        <span class="euiPanel-title">Generate Exception</span>
+      </div>
+      <p class="euiPanel-desc">
+        Hits <span class="mono">/error</span> — the server raises a
+        <span class="mono">ZeroDivisionError</span> which the APM agent captures
+        and records as an error transaction.
+      </p>
+      <div>
+        <button class="euiButton btn-danger" onclick="triggerError(this)">Trigger Error</button>
+      </div>
+    </div>
+
+    <div class="euiPanel">
+      <div class="euiPanel-head">
+        <div class="euiPanel-icon icon-message">✉</div>
+        <span class="euiPanel-title">Send Custom Message</span>
+      </div>
+      <p class="euiPanel-desc">
+        Sends a custom string to APM via
+        <span class="mono">/custom_message/{"{msg}"}</span>.
+        Appears as a captured message event in the APM UI.
+      </p>
+      <div class="field-row">
+        <input id="msg-input" class="eui-input" type="text" placeholder="Enter a message…" value="hello from demo">
+        <button class="euiButton btn-primary" onclick="sendMessage(this)">Send</button>
+      </div>
+    </div>
+
+  </div>
+
+  <p class="euiTitle--xxs">Activity</p>
+  <div class="euiPanel--log">
+    <div class="log-toolbar">
+      <span class="log-toolbar-label">Recent events</span>
+      <button class="euiButton btn-ghost" style="height:28px;font-size:11px;padding:0 10px" onclick="clearLog()">Clear</button>
+    </div>
+    <div class="log-scroll" id="log-scroll">
+      <div class="log-empty" id="log-empty">No events yet — trigger an action above</div>
+    </div>
+  </div>
+
+</div>
+
+<div class="toasts" id="toasts"></div>
+
+<script>
+  function ts() {
+    return new Date().toLocaleTimeString('en-US', { hour12: false });
+  }
+
+  function addLog(type, text) {
+    const empty = document.getElementById('log-empty');
+    if (empty) empty.remove();
+    const row = document.createElement('div');
+    row.className = 'log-row';
+    row.innerHTML = `<span class="log-ts">${ts()}</span><span class="type-${type}">${type}</span><span class="log-body">${text}</span>`;
+    document.getElementById('log-scroll').prepend(row);
+  }
+
+  function toast(msg, kind = '') {
+    const t = document.createElement('div');
+    t.className = `toast ${kind ? 'toast-' + kind : ''}`;
+    t.textContent = msg;
+    document.getElementById('toasts').appendChild(t);
+    setTimeout(() => t.remove(), 3500);
+  }
+
+  async function triggerError(btn) {
+    btn.disabled = true;
+    try {
+      const res = await fetch('/error');
+      const data = await res.json();
+      addLog('err', data.message);
+      toast('Exception captured by APM', 'err');
+    } catch (e) {
+      toast('Request failed: ' + e.message, 'err');
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  async function sendMessage(btn) {
+    const input = document.getElementById('msg-input');
+    const msg = input.value.trim();
+    if (!msg) { toast('Enter a message first'); return; }
+    btn.disabled = true;
+    try {
+      const res = await fetch('/custom_message/' + encodeURIComponent(msg));
+      const data = await res.json();
+      addLog('msg', data.message);
+      toast('Message sent to APM', 'ok');
+    } catch (e) {
+      toast('Request failed: ' + e.message, 'err');
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  function clearLog() {
+    document.getElementById('log-scroll').innerHTML =
+      '<div class="log-empty" id="log-empty">No events yet — trigger an action above</div>';
+  }
+
+  document.getElementById('msg-input').addEventListener('keydown', e => {
+    if (e.key === 'Enter') document.querySelector('.btn-primary').click();
+  });
+</script>
+
+</body>
+</html>

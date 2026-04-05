@@ -1,0 +1,37 @@
+metricbeat.config.modules:
+  path: ${path.config}/modules.d/*.yml
+  reload.enabled: false
+
+metricbeat.modules:
+- module: elasticsearch
+  xpack.enabled: true
+  period: 10s
+  hosts: ${ELASTIC_HOSTS}
+  username: ${ELASTIC_USER}
+  password: ${ELASTIC_PASSWORD}
+  ssl:
+    enabled: true
+    certificate_authorities: ${CA_CERT}
+
+- module: kibana
+  metricsets:
+    - stats
+  period: 10s
+  hosts: ${KIBANA_HOSTS}
+  username: ${ELASTIC_USER}
+  password: ${ELASTIC_PASSWORD}
+  xpack.enabled: true
+  ssl:
+    enabled: true
+    certificate_authorities: ${CA_CERT}
+
+processors:
+  - add_host_metadata: ~
+
+output.elasticsearch:
+  hosts: ${ELASTIC_HOSTS}
+  username: ${ELASTIC_USER}
+  password: ${ELASTIC_PASSWORD}
+  ssl:
+    enabled: true
+    certificate_authorities: ${CA_CERT}

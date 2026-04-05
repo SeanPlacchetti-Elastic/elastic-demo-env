@@ -1,0 +1,18 @@
+# syntax=docker/dockerfile:1
+FROM ruby:3.2-slim
+WORKDIR /app
+
+# Bundler system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential && \
+    rm -rf /var/lib/apt/lists/*
+
+COPY Gemfile .
+RUN bundle install --jobs 4 --retry 3
+
+COPY app.rb config.ru ./
+
+# APM is configured entirely via environment variables:
+#   ELASTIC_APM_SERVICE_NAME, ELASTIC_APM_SECRET_TOKEN,
+#   ELASTIC_APM_SERVER_URL, ELASTIC_APM_ENVIRONMENT
+CMD ["bundle", "exec", "puma", "-b", "tcp://0.0.0.0:8000", "-e", "production", "config.ru"]

@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <AssemblyName>east-pricing</AssemblyName>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- Elastic APM auto-instrumentation for ASP.NET Core -->
+    <PackageReference Include="Elastic.Apm.AspNetCore"         Version="1.25.0" />
+    <!-- ECS-structured logging via Serilog -->
+    <PackageReference Include="Elastic.CommonSchema.Serilog"   Version="8.6.0" />
+    <PackageReference Include="Serilog.AspNetCore"             Version="8.0.1" />
+    <PackageReference Include="Serilog.Sinks.Console"          Version="5.0.0" />
+  </ItemGroup>
+</Project>

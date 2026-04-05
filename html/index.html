@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Elastic CCS Demo</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; background: #fafbfd; color: #343741; font-size: 14px; line-height: 1.5; min-height: 100vh; }
+
+    /* ── EUI-style tokens ── */
+    :root {
+      --euiColorPrimary: #07C;
+      --euiColorSuccess: #00BFB3;
+      --euiColorWarning: #FEC514;
+      --euiColorDanger: #BD271E;
+      --euiColorAccent: #F04E98;
+      --euiColorEmptyShade: #FFF;
+      --euiColorLightestShade: #F5F7FA;
+      --euiColorLightShade: #D3DAE6;
+      --euiColorMediumShade: #98A2B3;
+      --euiColorDarkShade: #69707D;
+      --euiColorDarkestShade: #343741;
+      --euiColorFullShade: #1a1c21;
+      --euiBorderRadius: 6px;
+      --euiSizeS: 8px;
+      --euiSizeM: 16px;
+      --euiSizeL: 24px;
+      --euiSizeXL: 32px;
+    }
+
+    /* ── Header bar ── */
+    .euiHeader {
+      height: 48px; background: var(--euiColorDarkestShade); display: flex; align-items: center;
+      padding: 0 var(--euiSizeL); gap: 12px; position: sticky; top: 0; z-index: 10;
+    }
+    .euiHeaderLogo {
+      width: 28px; height: 28px; border-radius: var(--euiBorderRadius); flex-shrink: 0;
+      background: linear-gradient(135deg, var(--euiColorAccent) 0%, var(--euiColorPrimary) 100%);
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 700; font-size: 13px; color: #fff;
+    }
+    .euiHeaderTitle { font-size: 14px; font-weight: 600; color: #fff; }
+    .euiHeaderTitle span { color: var(--euiColorAccent); }
+
+    /* ── Page layout ── */
+    .euiPageBody { max-width: 1080px; margin: 0 auto; padding: var(--euiSizeXL) var(--euiSizeL) 64px; }
+    .euiTitle--l { font-size: 24px; font-weight: 700; color: var(--euiColorFullShade); margin-bottom: 8px; }
+    .euiText--subdued { color: var(--euiColorDarkShade); font-size: 14px; line-height: 1.6; margin-bottom: var(--euiSizeL); }
+    .euiText--subdued strong { color: var(--euiColorDarkestShade); }
+
+    /* ── Section titles ── */
+    .euiTitle--xs {
+      font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
+      color: var(--euiColorDarkShade); padding-bottom: var(--euiSizeS);
+      border-bottom: 1px solid var(--euiColorLightShade); margin-bottom: var(--euiSizeM);
+    }
+    section { margin-bottom: var(--euiSizeXL); }
+
+    /* ── Cards grid ── */
+    .euiFlexGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: var(--euiSizeM); }
+    .euiCard {
+      background: var(--euiColorEmptyShade); border: 1px solid var(--euiColorLightShade);
+      border-radius: var(--euiBorderRadius); padding: var(--euiSizeM); text-decoration: none; color: inherit;
+      transition: box-shadow .15s, border-color .15s; display: flex; flex-direction: column; gap: 6px;
+    }
+    .euiCard:hover { box-shadow: 0 2px 12px rgba(0,0,0,.08); border-color: var(--euiColorMediumShade); }
+    .euiCard__title { font-size: 14px; font-weight: 600; color: var(--euiColorFullShade); display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .euiCard__description { font-size: 13px; color: var(--euiColorDarkShade); line-height: 1.55; flex: 1; }
+    .euiCard__url { font-size: 11px; color: var(--euiColorPrimary); font-family: 'Roboto Mono', monospace; }
+
+    /* ── Badges ── */
+    .euiBadge {
+      font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: var(--euiBorderRadius);
+      display: inline-block; white-space: nowrap; line-height: 1.5;
+    }
+    .euiBadge--west { background: #e6f0ff; color: #004080; }
+    .euiBadge--east { background: #e6fff4; color: #006040; }
+    .euiBadge--dev { background: #fff5e6; color: #8a6300; }
+    .euiBadge--prod { background: #e6fff4; color: #006040; }
+    .euiBadge--shared { background: #f0e6ff; color: #5a2d82; }
+    .euiBadge--danger { background: #fce8e6; color: var(--euiColorDanger); }
+    .euiBadge--warning { background: #fef6e0; color: #8a6300; }
+    .euiBadge--primary { background: #e6f0ff; color: var(--euiColorPrimary); }
+
+    /* ── Panels ── */
+    .euiPanel {
+      background: var(--euiColorEmptyShade); border: 1px solid var(--euiColorLightShade);
+      border-radius: var(--euiBorderRadius); padding: 20px;
+    }
+    .euiPanel--subdued { background: var(--euiColorLightestShade); }
+    .euiPanel p { font-size: 13px; color: var(--euiColorDarkShade); line-height: 1.7; margin-bottom: 10px; }
+    .euiPanel p:last-child { margin-bottom: 0; }
+    .euiPanel strong { color: var(--euiColorDarkestShade); }
+    .euiPanel code {
+      background: var(--euiColorLightestShade); border: 1px solid var(--euiColorLightShade);
+      border-radius: 4px; padding: 1px 6px; font-size: 12px; color: var(--euiColorPrimary); font-family: monospace;
+    }
+    .euiPanel ul { list-style: none; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+    .euiPanel li { font-size: 13px; color: var(--euiColorDarkShade); line-height: 1.6; padding-left: 20px; position: relative; }
+    .euiPanel li::before { content: "\2192"; position: absolute; left: 0; color: var(--euiColorMediumShade); }
+    .euiPanel li strong { color: var(--euiColorDarkestShade); }
+
+    /* ── Table ── */
+    .euiTable { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 12px; }
+    .euiTable th { padding: 8px 12px; text-align: left; font-weight: 600; color: var(--euiColorDarkShade); border-bottom: 2px solid var(--euiColorLightShade); font-size: 12px; }
+    .euiTable td { padding: 8px 12px; border-bottom: 1px solid var(--euiColorLightestShade); }
+    .euiTable code { background: var(--euiColorLightestShade); padding: 1px 5px; border-radius: 3px; font-size: 12px; }
+
+    /* ── Credentials ── */
+    .euiDescriptionList {
+      display: inline-grid; grid-template-columns: auto auto; gap: 4px 16px;
+      background: var(--euiColorLightestShade); border: 1px solid var(--euiColorLightShade);
+      border-radius: var(--euiBorderRadius); padding: 12px 16px; margin-top: 10px;
+    }
+    .euiDescriptionList dt { font-size: 12px; color: var(--euiColorDarkShade); font-weight: 600; }
+    .euiDescriptionList dd { font-size: 13px; color: var(--euiColorPrimary); font-family: monospace; }
+
+    /* ── Investigation cards ── */
+    .euiCard--danger { border-left: 3px solid var(--euiColorDanger); }
+    .euiCard--warning { border-left: 3px solid var(--euiColorWarning); }
+    .euiCard--primary { border-left: 3px solid var(--euiColorPrimary); }
+
+    /* ── Footer ── */
+    .euiFooter { margin-top: 48px; padding: var(--euiSizeM); text-align: center; font-size: 12px; color: var(--euiColorMediumShade); border-top: 1px solid var(--euiColorLightShade); }
+  </style>
+</head>
+<body>
+
+<div class="euiHeader">
+  <div class="euiHeaderLogo">E</div>
+  <div class="euiHeaderTitle">elastic <span>demo</span></div>
+</div>
+
+<div class="euiPageBody">
+
+  <h1 class="euiTitle--l">Elastic CCS Demo Environment</h1>
+  <p class="euiText--subdued">
+    Two-cluster Elastic Stack: <strong>East</strong> (production — all observability data) and
+    <strong>West</strong> (operations/NOC — CCS reader with alerting).
+    APM, ML, Synthetics, Filebeat, Metricbeat, and Heartbeat all ship to east.
+    West watches east via Cross-Cluster Search.
+  </p>
+
+  <!-- ── Kibana ── -->
+  <section>
+    <h2 class="euiTitle--xs">Kibana</h2>
+    <div class="euiFlexGrid">
+      <a class="euiCard" href="https://localhost:5601" target="_blank">
+        <div class="euiCard__title">Kibana — West <span class="euiBadge euiBadge--west">cluster-west</span></div>
+        <div class="euiCard__url">https://localhost:5601</div>
+        <div class="euiCard__description">Operations / NOC cluster. Reads east production data via CCS. Hosts cross-cluster alerting rules. Stack monitoring for west ES nodes only.</div>
+      </a>
+      <a class="euiCard" href="https://localhost:5602" target="_blank">
+        <div class="euiCard__title">Kibana — East <span class="euiBadge euiBadge--east">cluster-east</span></div>
+        <div class="euiCard__url">https://localhost:5602</div>
+        <div class="euiCard__description">Production cluster. ALL observability data lives here — APM traces, logs, metrics, synthetics, heartbeat, ML jobs. Primary Kibana for investigation.</div>
+      </a>
+    </div>
+  </section>
+
+  <!-- ── Webapps ── -->
+  <section>
+    <h2 class="euiTitle--xs">Demo Webapps (APM-instrumented)</h2>
+    <div class="euiFlexGrid">
+      <a class="euiCard" href="https://localhost:8000" target="_blank">
+        <div class="euiCard__title">Python Webapp — West <span class="euiBadge euiBadge--west">cluster-west</span></div>
+        <div class="euiCard__url">https://localhost:8000</div>
+        <div class="euiCard__description">Generates APM transactions. Heartbeat hits <code>/</code>, <code>/error</code>, and <code>/custom_message/:msg</code>.</div>
+      </a>
+      <a class="euiCard" href="https://localhost:8001" target="_blank">
+        <div class="euiCard__title">Development Gateway <span class="euiBadge euiBadge--dev">development</span></div>
+        <div class="euiCard__url">https://localhost:8001</div>
+        <div class="euiCard__description">7-service microservice UI with <strong>anomalies enabled</strong>. Cascading degradation patterns fire every 10 minutes. Used for ML training and investigation narratives.</div>
+      </a>
+      <a class="euiCard" href="https://localhost:8002" target="_blank">
+        <div class="euiCard__title">Production Gateway <span class="euiBadge euiBadge--prod">production</span></div>
+        <div class="euiCard__url">https://localhost:8002</div>
+        <div class="euiCard__description">Identical 7-service architecture but <strong>stable and clean</strong>. No programmed latency or errors. Represents the baseline of normal behavior in APM.</div>
+      </a>
+    </div>
+  </section>
+
+  <!-- ── Elasticsearch ── -->
+  <section>
+    <h2 class="euiTitle--xs">Elasticsearch API</h2>
+    <div class="euiFlexGrid">
+      <a class="euiCard" href="https://localhost:9200" target="_blank">
+        <div class="euiCard__title">Elasticsearch — West <span class="euiBadge euiBadge--west">cluster-west</span></div>
+        <div class="euiCard__url">https://localhost:9200</div>
+        <div class="euiCard__description">3-node cluster. CCS coordinator querying the east cluster.</div>
+      </a>
+      <a class="euiCard" href="https://localhost:9201" target="_blank">
+        <div class="euiCard__title">Elasticsearch — East <span class="euiBadge euiBadge--east">cluster-east</span></div>
+        <div class="euiCard__url">https://localhost:9201</div>
+        <div class="euiCard__description">3-node production cluster. ALL observability data. CCS remote for west.</div>
+      </a>
+      <a class="euiCard" href="https://localhost:9202" target="_blank">
+        <div class="euiCard__title">Elasticsearch — Search <span class="euiBadge euiBadge--east">search-cluster</span></div>
+        <div class="euiCard__url">https://localhost:9202</div>
+        <div class="euiCard__description">Single-node application search backend. Lexical search, search-as-you-type, and typeahead completion. Try it in the <a href="https://localhost:8001" style="color:var(--euiColorPrimary);">gateway UI</a>.</div>
+      </a>
+    </div>
+  </section>
+
+  <!-- ── Investigation Narratives ── -->
+  <section>
+    <h2 class="euiTitle--xs">Guided Investigations — Pivot Through Your Data</h2>
+    <p class="euiText--subdued" style="margin-bottom:16px;">Every 10 minutes, a cascading degradation ripples through the development microservices. Use these narratives to practice the core Elastic Observability workflow: <strong>detect &rarr; triage &rarr; correlate &rarr; root-cause</strong>.</p>
+    <div class="euiFlexGrid">
+      <div class="euiCard euiCard--danger" style="cursor:default;">
+        <div class="euiCard__title">Investigation 1: The Cascading Slowdown</div>
+        <div class="euiCard__description">
+          <strong>Symptom:</strong> APM Service Map shows red/yellow latency indicators across multiple services.<br><br>
+          <strong>Steps:</strong><br>
+          1. Open <strong>Observability &rarr; APM &rarr; Service Map</strong>. Watch for services turning yellow/red.<br>
+          2. Click the first degraded service (usually <code>east-catalog</code>). Open <strong>Transactions</strong>.<br>
+          3. Click a slow transaction &rarr; <strong>Trace waterfall</strong>. See which downstream call took longest.<br>
+          4. <strong>Actions &rarr; View in Discover</strong>. Pivot to logs filtered by <code>trace.id</code>.<br>
+          5. Look for <code>scenario=degraded</code> and <em>"database connection pool exhausted"</em>.<br>
+          6. Open <strong>ML &rarr; Anomaly Explorer</strong>. The latency job flags the same window.<br><br>
+          <strong>Root cause:</strong> Catalog degrades at second 420 of each 10-minute cycle. Other services cascade: inventory (440s), pricing (450s), reviews (460s), orders (470s), recommendations (480s).
+        </div>
+      </div>
+      <div class="euiCard euiCard--warning" style="cursor:default;">
+        <div class="euiCard__title">Investigation 2: Error Spike Correlation</div>
+        <div class="euiCard__description">
+          <strong>Symptom:</strong> ML error rate job flags an anomaly. Multiple services show 503 errors simultaneously.<br><br>
+          <strong>Steps:</strong><br>
+          1. Open <strong>ML &rarr; Anomaly Explorer</strong>. Select <code>demo-apm-error-rate</code>. Note flagged services.<br>
+          2. Click anomaly swimlane &rarr; <strong>View in APM</strong>. The Errors tab shows specific exceptions.<br>
+          3. Compare error messages: catalog says <em>"db pool exhaustion"</em>, orders says <em>"deadlock"</em> — different symptoms, same window.<br>
+          4. <strong>Logs</strong>: filter <code>log.level: error AND scenario: degraded</code>. All errors cluster in 90 seconds.<br><br>
+          <strong>Root cause:</strong> Each service returns 503s at different rates (10-15%). Errors are correlated in time but differ per language — the pattern of a real cascading failure.
+        </div>
+      </div>
+      <div class="euiCard euiCard--primary" style="cursor:default;">
+        <div class="euiCard__title">Investigation 3: The Latency Outlier</div>
+        <div class="euiCard__description">
+          <strong>Symptom:</strong> <code>demo-latency-outliers</code> ML job detects one service with mean latency 10x above baseline.<br><br>
+          <strong>Steps:</strong><br>
+          1. <strong>ML &rarr; Anomaly Explorer</strong> &rarr; <code>demo-latency-outliers</code>. Partition view shows the outlier.<br>
+          2. <code>east-recommendations</code> (Rust) has the highest score — 600-2000ms in degraded mode.<br>
+          3. <strong>APM &rarr; Transactions</strong>. Latency distribution shows bimodal: 10-80ms (normal) vs 600-2000ms (degraded).<br>
+          4. Open a slow trace. Waterfall shows recommendation computation dominating duration.<br>
+          5. Pivot to <strong>Logs</strong>. See <em>"Recommendation model timeout"</em>.<br><br>
+          <strong>Root cause:</strong> Recommendations degrades last (second 480) but has the most extreme latency, making it the biggest outlier.
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Anomaly Pattern Reference ── -->
+  <section>
+    <h2 class="euiTitle--xs">Anomaly Pattern Reference</h2>
+    <div class="euiPanel">
+      <p>All development services follow a <strong>10-minute cycle</strong> (600 seconds). During the degradation window, each service introduces latency spikes and HTTP 503 errors. The <strong>cascade offset</strong> creates a realistic ripple effect.</p>
+      <table class="euiTable">
+        <thead>
+          <tr>
+            <th>Service</th>
+            <th>Language</th>
+            <th>Degraded Window</th>
+            <th>Slow %</th>
+            <th>Error %</th>
+            <th>Error Type</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>east-catalog</td><td>Java</td><td><code>420s-510s</code></td><td>60%</td><td>15%</td><td><span class="euiBadge euiBadge--danger">DB pool exhaustion</span></td></tr>
+          <tr><td>east-inventory</td><td>Go</td><td><code>440s-510s</code></td><td>50%</td><td>10%</td><td><span class="euiBadge euiBadge--danger">Warehouse sync timeout</span></td></tr>
+          <tr><td>east-pricing</td><td>.NET</td><td><code>450s-510s</code></td><td>45%</td><td>10%</td><td><span class="euiBadge euiBadge--danger">Cache miss / rate limit</span></td></tr>
+          <tr><td>east-reviews</td><td>PHP</td><td><code>460s-510s</code></td><td>40%</td><td>12%</td><td><span class="euiBadge euiBadge--danger">Connection pool exhausted</span></td></tr>
+          <tr><td>east-orders</td><td>Ruby</td><td><code>470s-510s</code></td><td>50%</td><td>12%</td><td><span class="euiBadge euiBadge--danger">Database deadlock</span></td></tr>
+          <tr><td>east-recommendations</td><td>Rust</td><td><code>480s-510s</code></td><td>55%</td><td>10%</td><td><span class="euiBadge euiBadge--danger">Model inference timeout</span></td></tr>
+        </tbody>
+      </table>
+      <p style="margin-top:12px;"><strong>ML jobs:</strong> APM duration anomaly (built-in), <code>demo-apm-error-rate</code>, <code>demo-log-rate</code>, <code>demo-latency-outliers</code>. All use 5-minute bucket spans partitioned by <code>service.name</code>.</p>
+    </div>
+  </section>
+
+  <!-- ── Synthetic Monitor Journeys ── -->
+  <section>
+    <h2 class="euiTitle--xs">Synthetic Monitor Journeys</h2>
+    <div class="euiFlexGrid">
+      <div class="euiCard" style="cursor:default;">
+        <div class="euiCard__title">Customer Shopping Journey <span class="euiBadge euiBadge--east">10 min</span></div>
+        <div class="euiCard__description">Simulates a shopper clicking through the development gateway. Fetches catalog (Java), inventory (Go), pricing (.NET), reviews (PHP), recommendations (Rust), and orders (Ruby). Each step generates a distributed APM trace spanning all 7 languages.</div>
+      </div>
+      <div class="euiCard" style="cursor:default;">
+        <div class="euiCard__title">APM Error Tracking &amp; Custom Events <span class="euiBadge euiBadge--west">15 min</span></div>
+        <div class="euiCard__description">Triggers a <code>ZeroDivisionError</code> on the west webapp to verify APM error capture, then sends a custom message to verify event ingestion.</div>
+      </div>
+      <div class="euiCard" style="cursor:default;">
+        <div class="euiCard__title">Demo Launchpad Health Check <span class="euiBadge euiBadge--shared">20 min</span></div>
+        <div class="euiCard__description">Checks that this landing page loads, both Kibana links are present, the gateway link is listed, and the "What this demo covers" section is visible.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── About ── -->
+  <section>
+    <h2 class="euiTitle--xs">What this demo covers</h2>
+    <div class="euiPanel euiPanel--subdued">
+      <ul>
+        <li><strong>Two-cluster architecture</strong> — East is the production cluster where all observability data lives. West is the operations/NOC cluster that reads east data via CCS and hosts alerting rules.</li>
+        <li><strong>Cross-Cluster Search (CCS)</strong> — West Kibana queries <code>cluster-east:*</code> indices. Three cross-cluster data views: APM traces, Filebeat logs, Heartbeat uptime.</li>
+        <li><strong>Cross-Cluster Alerting</strong> — Three rules in west Kibana watch east production data: high error rate, degraded mode detection, health check failures.</li>
+        <li><strong>APM &amp; Distributed Tracing</strong> — All services ship traces to east. Distributed traces span 7 languages with up to 4-hop depth. ML anomaly detection runs on APM data.</li>
+        <li><strong>Dual Environments</strong> — Development (port 8001, anomalies enabled) and Production (port 8002, stable). Same service names, different <code>ELASTIC_APM_ENVIRONMENT</code>. APM data streams split by namespace.</li>
+        <li><strong>Application Search</strong> — Dedicated <code>search-es01</code> cluster powers lexical search, search-as-you-type, and completion suggester for the product catalog.</li>
+        <li><strong>Synthetic Monitoring</strong> — Fleet Server + elastic-agent-complete on east. Three Playwright browser journeys test real user flows.</li>
+        <li><strong>Heartbeat</strong> — Monitors both clusters and all microservice health endpoints. Data ships to east.</li>
+        <li><strong>Filebeat + Metricbeat</strong> — East filebeat autodiscovers container logs. East metricbeat collects ES, Kibana, and Docker metrics. West metricbeat: stack monitoring only.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ── Credentials ── -->
+  <section>
+    <h2 class="euiTitle--xs">Default credentials</h2>
+    <div class="euiPanel">
+      <p>Both Kibana instances and Elasticsearch use the same superuser account:</p>
+      <dl class="euiDescriptionList">
+        <dt>Username</dt><dd>elastic</dd>
+        <dt>Password</dt><dd>changeme</dd>
+      </dl>
+      <p style="margin-top:12px;">Passwords are set in <code>.env</code> — change <code>ELASTIC_PASSWORD</code> before deploying to any shared or non-local environment.</p>
+    </div>
+  </section>
+
+</div>
+
+<div class="euiFooter">Elastic CCS Demo &mdash; local Docker environment</div>
+
+</body>
+</html>

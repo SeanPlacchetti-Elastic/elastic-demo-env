@@ -1,0 +1,230 @@
+# Heartbeat monitors — ships to east-es01
+# data_stream.namespace matches the environment each monitor targets
+
+heartbeat.monitors:
+
+# ── West webapp (production namespace — APM goes to prod-apm-server) ─────────
+- type: http
+  id: west-webapp-homepage
+  name: "cluster-west | Webapp Homepage"
+  data_stream.namespace: production
+  schedule: "@every 30s"
+  urls: ["https://west-webapp:8000/"]
+  ssl:
+    certificate_authorities: ["certs/ca/ca.crt"]
+  check.response.status: [200]
+
+- type: http
+  id: west-webapp-error-trigger
+  name: "cluster-west | Webapp Error Trigger (synthetic APM errors)"
+  data_stream.namespace: production
+  schedule: "@every 15s"
+  urls: ["https://west-webapp:8000/error"]
+  ssl:
+    certificate_authorities: ["certs/ca/ca.crt"]
+  check.response.status: [200]
+
+- type: http
+  id: west-webapp-custom-message
+  name: "cluster-west | Webapp Custom Message (synthetic APM transactions)"
+  data_stream.namespace: production
+  schedule: "@every 45s"
+  urls: ["https://west-webapp:8000/custom_message/synthetic-heartbeat-ping"]
+  ssl:
+    certificate_authorities: ["certs/ca/ca.crt"]
+  check.response.status: [200]
+
+# ── Development gateway + microservices ───────────────────────────────────────
+- type: http
+  id: east-webapp-homepage
+  name: "development | Gateway Homepage"
+  data_stream.namespace: development
+  schedule: "@every 30s"
+  urls: ["https://east-gateway:8000/"]
+  ssl:
+    certificate_authorities: ["certs/ca/ca.crt"]
+  check.response.status: [200]
+
+- type: http
+  id: east-webapp-error-trigger
+  name: "development | Gateway Error Trigger (synthetic APM errors)"
+  data_stream.namespace: development
+  schedule: "@every 15s"
+  urls: ["https://east-gateway:8000/error"]
+  ssl:
+    certificate_authorities: ["certs/ca/ca.crt"]
+  check.response.status: [200]
+
+- type: http
+  id: east-webapp-custom-message
+  name: "development | Gateway Custom Message (synthetic APM transactions)"
+  data_stream.namespace: development
+  schedule: "@every 45s"
+  urls: ["https://east-gateway:8000/custom_message/synthetic-heartbeat-ping"]
+  ssl:
+    certificate_authorities: ["certs/ca/ca.crt"]
+  check.response.status: [200]
+
+- type: http
+  id: east-catalog-health
+  name: "development | Catalog Service Health (Java)"
+  data_stream.namespace: development
+  schedule: "@every 30s"
+  urls: ["http://east-catalog:8000/health"]
+  check.response.status: [200]
+
+- type: http
+  id: east-inventory-health
+  name: "development | Inventory Service Health (Go)"
+  data_stream.namespace: development
+  schedule: "@every 30s"
+  urls: ["http://east-inventory:8000/health"]
+  check.response.status: [200]
+
+- type: http
+  id: east-pricing-health
+  name: "development | Pricing Service Health (.NET)"
+  data_stream.namespace: development
+  schedule: "@every 30s"
+  urls: ["http://east-pricing:8000/health"]
+  check.response.status: [200]
+
+- type: http
+  id: east-reviews-health
+  name: "development | Reviews Service Health (PHP)"
+  data_stream.namespace: development
+  schedule: "@every 30s"
+  urls: ["http://east-reviews:8000/health"]
+  check.response.status: [200]
+
+- type: http
+  id: east-orders-health
+  name: "development | Orders Service Health (Ruby)"
+  data_stream.namespace: development
+  schedule: "@every 30s"
+  urls: ["http://east-orders:8000/health"]
+  check.response.status: [200]
+
+- type: http
+  id: east-recommendations-health
+  name: "development | Recommendations Service Health (Rust)"
+  data_stream.namespace: development
+  schedule: "@every 30s"
+  urls: ["http://east-recommendations:8000/health"]
+  check.response.status: [200]
+
+# ── Production gateway + microservices ────────────────────────────────────────
+- type: http
+  id: prod-gateway-homepage
+  name: "production | Gateway Homepage"
+  data_stream.namespace: production
+  schedule: "@every 30s"
+  urls: ["https://prod-gateway:8000/"]
+  ssl:
+    certificate_authorities: ["certs/ca/ca.crt"]
+  check.response.status: [200]
+
+- type: http
+  id: prod-catalog-health
+  name: "production | Catalog Service Health (Java)"
+  data_stream.namespace: production
+  schedule: "@every 30s"
+  urls: ["http://prod-catalog:8000/health"]
+  check.response.status: [200]
+
+- type: http
+  id: prod-inventory-health
+  name: "production | Inventory Service Health (Go)"
+  data_stream.namespace: production
+  schedule: "@every 30s"
+  urls: ["http://prod-inventory:8000/health"]
+  check.response.status: [200]
+
+- type: http
+  id: prod-pricing-health
+  name: "production | Pricing Service Health (.NET)"
+  data_stream.namespace: production
+  schedule: "@every 30s"
+  urls: ["http://prod-pricing:8000/health"]
+  check.response.status: [200]
+
+- type: http
+  id: prod-reviews-health
+  name: "production | Reviews Service Health (PHP)"
+  data_stream.namespace: production
+  schedule: "@every 30s"
+  urls: ["http://prod-reviews:8000/health"]
+  check.response.status: [200]
+
+- type: http
+  id: prod-orders-health
+  name: "production | Orders Service Health (Ruby)"
+  data_stream.namespace: production
+  schedule: "@every 30s"
+  urls: ["http://prod-orders:8000/health"]
+  check.response.status: [200]
+
+- type: http
+  id: prod-recommendations-health
+  name: "production | Recommendations Service Health (Rust)"
+  data_stream.namespace: production
+  schedule: "@every 30s"
+  urls: ["http://prod-recommendations:8000/health"]
+  check.response.status: [200]
+
+# ── Infrastructure (default namespace) ────────────────────────────────────────
+- type: http
+  id: west-kibana
+  name: "cluster-west | Kibana"
+  schedule: "@every 60s"
+  urls: ["https://kibana-west:5601"]
+  ssl:
+    certificate_authorities: ["certs/ca/ca.crt"]
+  check.response.status: [302]
+
+- type: http
+  id: east-kibana
+  name: "cluster-east | Kibana"
+  schedule: "@every 60s"
+  urls: ["https://kibana-east:5601"]
+  ssl:
+    certificate_authorities: ["certs/ca/ca.crt"]
+  check.response.status: [302]
+
+- type: http
+  id: west-es
+  name: "cluster-west | Elasticsearch"
+  schedule: "@every 60s"
+  urls: ["https://west-es01:9200"]
+  ssl:
+    certificate_authorities: ["certs/ca/ca.crt"]
+  username: ${ELASTIC_USER}
+  password: ${ELASTIC_PASSWORD}
+  check.response.status: [200]
+
+- type: http
+  id: east-es
+  name: "cluster-east | Elasticsearch"
+  schedule: "@every 60s"
+  urls: ["https://east-es01:9200"]
+  ssl:
+    certificate_authorities: ["certs/ca/ca.crt"]
+  username: ${ELASTIC_USER}
+  password: ${ELASTIC_PASSWORD}
+  check.response.status: [200]
+
+setup.kibana:
+  host: ${KIBANA_HOSTS}
+  username: ${ELASTIC_USER}
+  password: ${ELASTIC_PASSWORD}
+  ssl:
+    enabled: true
+    certificate_authorities: ${CA_CERT}
+
+output.elasticsearch:
+  hosts: ${ELASTIC_HOSTS}
+  username: ${ELASTIC_USER}
+  password: ${ELASTIC_PASSWORD}
+  ssl:
+    enabled: true
+    certificate_authorities: ${CA_CERT}

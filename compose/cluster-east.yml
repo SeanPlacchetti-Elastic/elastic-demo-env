@@ -1,0 +1,635 @@
+services:
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # CLUSTER-EAST: 3-node remote cluster
+  # Datasets: web access logs, DB query perf logs, API response metrics (logs/metrics)
+  #           Elasticsearch + Docker metrics (metrics)
+  #           East webapp APM traces (traces)
+  # ES: https://localhost:9201  Kibana: https://localhost:5602
+  # All nodes on net-ccs so cluster-west can reach all 3 for CCS sniff mode
+  # ─────────────────────────────────────────────────────────────────────────────
+  east-es01:
+    depends_on:
+      setup:
+        condition: service_healthy
+    image: docker.elastic.co/elasticsearch/elasticsearch:${STACK_VERSION}
+    labels:
+      co.elastic.logs/module: elasticsearch
+    networks:
+      - net-east
+      - net-ccs
+    volumes:
+      - certs:/usr/share/elasticsearch/config/certs
+      - east-esdata01:/usr/share/elasticsearch/data
+    ports:
+      - ${EAST_ES_PORT}:9200
+    environment:
+      - node.name=east-es01
+      - cluster.name=${EAST_CLUSTER_NAME}
+      - discovery.seed_hosts=east-es01,east-es02,east-es03
+      - cluster.initial_master_nodes=east-es01,east-es02,east-es03
+      - ELASTIC_PASSWORD=${ELASTIC_PASSWORD}
+      - bootstrap.memory_lock=true
+      - xpack.security.enabled=true
+      - xpack.security.http.ssl.enabled=true
+      - xpack.security.http.ssl.key=certs/east-es01/east-es01.key
+      - xpack.security.http.ssl.certificate=certs/east-es01/east-es01.crt
+      - xpack.security.http.ssl.certificate_authorities=certs/ca/ca.crt
+      - xpack.security.transport.ssl.enabled=true
+      - xpack.security.transport.ssl.key=certs/east-es01/east-es01.key
+      - xpack.security.transport.ssl.certificate=certs/east-es01/east-es01.crt
+      - xpack.security.transport.ssl.certificate_authorities=certs/ca/ca.crt
+      - xpack.security.transport.ssl.verification_mode=certificate
+      - xpack.license.self_generated.type=${LICENSE}
+    mem_limit: ${EAST_ES_MEM_LIMIT}
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "curl -s --cacert config/certs/ca/ca.crt https://localhost:9200 | grep -q 'missing authentication credentials'",
+        ]
+      interval: 10s
+      timeout: 10s
+      retries: 120
+
+  east-es02:
+    depends_on:
+      setup:
+        condition: service_healthy
+    image: docker.elastic.co/elasticsearch/elasticsearch:${STACK_VERSION}
+    labels:
+      co.elastic.logs/module: elasticsearch
+    networks:
+      - net-east
+      - net-ccs
+    volumes:
+      - certs:/usr/share/elasticsearch/config/certs
+      - east-esdata02:/usr/share/elasticsearch/data
+    environment:
+      - node.name=east-es02
+      - cluster.name=${EAST_CLUSTER_NAME}
+      - discovery.seed_hosts=east-es01,east-es02,east-es03
+      - cluster.initial_master_nodes=east-es01,east-es02,east-es03
+      - ELASTIC_PASSWORD=${ELASTIC_PASSWORD}
+      - bootstrap.memory_lock=true
+      - xpack.security.enabled=true
+      - xpack.security.http.ssl.enabled=true
+      - xpack.security.http.ssl.key=certs/east-es02/east-es02.key
+      - xpack.security.http.ssl.certificate=certs/east-es02/east-es02.crt
+      - xpack.security.http.ssl.certificate_authorities=certs/ca/ca.crt
+      - xpack.security.transport.ssl.enabled=true
+      - xpack.security.transport.ssl.key=certs/east-es02/east-es02.key
+      - xpack.security.transport.ssl.certificate=certs/east-es02/east-es02.crt
+      - xpack.security.transport.ssl.certificate_authorities=certs/ca/ca.crt
+      - xpack.security.transport.ssl.verification_mode=certificate
+      - xpack.license.self_generated.type=${LICENSE}
+    mem_limit: ${EAST_ES_MEM_LIMIT}
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "curl -s --cacert config/certs/ca/ca.crt https://localhost:9200 | grep -q 'missing authentication credentials'",
+        ]
+      interval: 10s
+      timeout: 10s
+      retries: 120
+
+  east-es03:
+    depends_on:
+      setup:
+        condition: service_healthy
+    image: docker.elastic.co/elasticsearch/elasticsearch:${STACK_VERSION}
+    labels:
+      co.elastic.logs/module: elasticsearch
+    networks:
+      - net-east
+      - net-ccs
+    volumes:
+      - certs:/usr/share/elasticsearch/config/certs
+      - east-esdata03:/usr/share/elasticsearch/data
+    environment:
+      - node.name=east-es03
+      - cluster.name=${EAST_CLUSTER_NAME}
+      - discovery.seed_hosts=east-es01,east-es02,east-es03
+      - cluster.initial_master_nodes=east-es01,east-es02,east-es03
+      - ELASTIC_PASSWORD=${ELASTIC_PASSWORD}
+      - bootstrap.memory_lock=true
+      - xpack.security.enabled=true
+      - xpack.security.http.ssl.enabled=true
+      - xpack.security.http.ssl.key=certs/east-es03/east-es03.key
+      - xpack.security.http.ssl.certificate=certs/east-es03/east-es03.crt
+      - xpack.security.http.ssl.certificate_authorities=certs/ca/ca.crt
+      - xpack.security.transport.ssl.enabled=true
+      - xpack.security.transport.ssl.key=certs/east-es03/east-es03.key
+      - xpack.security.transport.ssl.certificate=certs/east-es03/east-es03.crt
+      - xpack.security.transport.ssl.certificate_authorities=certs/ca/ca.crt
+      - xpack.security.transport.ssl.verification_mode=certificate
+      - xpack.license.self_generated.type=${LICENSE}
+    mem_limit: ${EAST_ES_MEM_LIMIT}
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "curl -s --cacert config/certs/ca/ca.crt https://localhost:9200 | grep -q 'missing authentication credentials'",
+        ]
+      interval: 10s
+      timeout: 10s
+      retries: 120
+
+  kibana-east:
+    depends_on:
+      east-es01:
+        condition: service_healthy
+    image: docker.elastic.co/kibana/kibana:${STACK_VERSION}
+    labels:
+      co.elastic.logs/module: kibana
+    networks:
+      - net-east
+    volumes:
+      - certs:/usr/share/kibana/config/certs
+      - east-kibanadata:/usr/share/kibana/data
+      - ../config/kibana-east.yml:/usr/share/kibana/config/kibana.yml:ro
+    ports:
+      - ${EAST_KIBANA_PORT}:5601
+    environment:
+      - SERVERNAME=kibana-east
+      - ELASTICSEARCH_HOSTS=https://east-es01:9200
+      - ELASTICSEARCH_USERNAME=kibana_system
+      - ELASTICSEARCH_PASSWORD=${EAST_KIBANA_PASSWORD}
+      - ELASTICSEARCH_SSL_CERTIFICATEAUTHORITIES=config/certs/ca/ca.crt
+      - XPACK_SECURITY_ENCRYPTIONKEY=${ENCRYPTION_KEY}
+      - XPACK_ENCRYPTEDSAVEDOBJECTS_ENCRYPTIONKEY=${ENCRYPTION_KEY}
+      - XPACK_REPORTING_ENCRYPTIONKEY=${ENCRYPTION_KEY}
+      - XPACK_REPORTING_KIBANASERVER_HOSTNAME=localhost
+      - SERVER_SSL_ENABLED=true
+      - SERVER_SSL_CERTIFICATE=config/certs/kibana-east/kibana-east.crt
+      - SERVER_SSL_KEY=config/certs/kibana-east/kibana-east.key
+      - SERVER_SSL_CERTIFICATEAUTHORITIES=config/certs/ca/ca.crt
+      - ELASTIC_APM_SECRET_TOKEN=${ELASTIC_APM_SECRET_TOKEN}
+    mem_limit: ${EAST_KB_MEM_LIMIT}
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "curl -I -s --cacert config/certs/ca/ca.crt https://localhost:5601 | grep -q 'HTTP/1.1 302 Found'",
+        ]
+      interval: 10s
+      timeout: 10s
+      retries: 120
+
+  east-apm-server:
+    depends_on:
+      east-es01:
+        condition: service_healthy
+    image: docker.elastic.co/apm/apm-server:${STACK_VERSION}
+    user: root
+    networks:
+      - net-east
+    ports:
+      - "${EAST_APMSERVER_PORT}:8200"
+    volumes:
+      - certs:/usr/share/apm-server/certs
+    command: >
+      apm-server -e
+         -E output.elasticsearch.hosts=["east-es01:9200"]
+         -E output.elasticsearch.protocol=https
+         -E output.elasticsearch.username=elastic
+         -E output.elasticsearch.password=${ELASTIC_PASSWORD}
+         -E output.elasticsearch.ssl.enabled=true
+         -E output.elasticsearch.ssl.certificate_authorities=/usr/share/apm-server/certs/ca/ca.crt
+         -E output.elasticsearch.ssl.certificate=/usr/share/apm-server/certs/east-apm-server/east-apm-server.crt
+         -E output.elasticsearch.ssl.key=/usr/share/apm-server/certs/east-apm-server/east-apm-server.key
+         -E apm-server.rum.enabled=true
+         -E apm-server.rum.allow_origins=["*"]
+         -E apm-server.rum.allow_headers=["content-type"]
+         -E apm-server.data_streams.namespace=development
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - SETGID
+      - SETUID
+    logging:
+      driver: 'json-file'
+      options:
+        max-size: '2m'
+        max-file: '5'
+    healthcheck:
+      test: ["CMD", "curl", "--write-out", "'HTTP %{http_code}'", "--silent", "--output", "/dev/null", "http://localhost:8200/healthcheck"]
+      interval: 10s
+      timeout: 10s
+      retries: 120
+
+  east-metricbeat:
+    depends_on:
+      east-es01:
+        condition: service_healthy
+      kibana-east:
+        condition: service_healthy
+    image: docker.elastic.co/beats/metricbeat:${STACK_VERSION}
+    user: root
+    networks:
+      - net-east
+    volumes:
+      - certs:/usr/share/metricbeat/certs
+      - east-metricbeatdata:/usr/share/metricbeat/data
+      - "../config/east-metricbeat.yml:/usr/share/metricbeat/metricbeat.yml:ro"
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+      - "/sys/fs/cgroup:/hostfs/sys/fs/cgroup:ro"
+      - "/proc:/hostfs/proc:ro"
+      - "/:/hostfs:ro"
+    environment:
+      - ELASTIC_USER=elastic
+      - ELASTIC_PASSWORD=${ELASTIC_PASSWORD}
+      - ELASTIC_HOSTS=https://east-es01:9200
+      - KIBANA_HOSTS=https://kibana-east:5601
+      - CA_CERT=certs/ca/ca.crt
+      - ES_CERT=certs/east-es01/east-es01.crt
+      - ES_KEY=certs/east-es01/east-es01.key
+    command: ["metricbeat", "-e", "--strict.perms=false"]
+
+  east-filebeat:
+    depends_on:
+      east-es01:
+        condition: service_healthy
+    image: docker.elastic.co/beats/filebeat:${STACK_VERSION}
+    user: root
+    networks:
+      - net-east
+    volumes:
+      - certs:/usr/share/filebeat/certs
+      - east-filebeatdata:/usr/share/filebeat/data
+      - "../east_ingest_data/:/usr/share/filebeat/ingest_data/"
+      - "../config/east-filebeat.yml:/usr/share/filebeat/filebeat.yml:ro"
+      - "/var/lib/docker/containers:/var/lib/docker/containers:ro"
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+    environment:
+      - ELASTIC_USER=elastic
+      - ELASTIC_PASSWORD=${ELASTIC_PASSWORD}
+      - ELASTIC_HOSTS=https://east-es01:9200
+      - CA_CERT=certs/ca/ca.crt
+    command: ["filebeat", "-e", "--strict.perms=false"]
+
+  # ── Search cluster (single-node, application backend) ────────────────────────
+  # Provides Elasticsearch-powered search for the microservice suite:
+  # search-as-you-type, completion suggester (typeahead), and lexical search.
+  # Separate from the observability cluster — this is an application dependency.
+  search-es01:
+    depends_on:
+      setup:
+        condition: service_healthy
+    image: docker.elastic.co/elasticsearch/elasticsearch:${STACK_VERSION}
+    labels:
+      co.elastic.logs/module: elasticsearch
+    networks:
+      - net-east
+    volumes:
+      - certs:/usr/share/elasticsearch/config/certs
+      - search-esdata01:/usr/share/elasticsearch/data
+    ports:
+      - ${SEARCH_ES_PORT}:9200
+    environment:
+      - node.name=search-es01
+      - cluster.name=${SEARCH_CLUSTER_NAME}
+      - discovery.type=single-node
+      - ELASTIC_PASSWORD=${ELASTIC_PASSWORD}
+      - bootstrap.memory_lock=true
+      - xpack.security.enabled=true
+      - xpack.security.http.ssl.enabled=true
+      - xpack.security.http.ssl.key=certs/search-es01/search-es01.key
+      - xpack.security.http.ssl.certificate=certs/search-es01/search-es01.crt
+      - xpack.security.http.ssl.certificate_authorities=certs/ca/ca.crt
+      - xpack.security.transport.ssl.enabled=true
+      - xpack.security.transport.ssl.key=certs/search-es01/search-es01.key
+      - xpack.security.transport.ssl.certificate=certs/search-es01/search-es01.crt
+      - xpack.security.transport.ssl.certificate_authorities=certs/ca/ca.crt
+      - xpack.security.transport.ssl.verification_mode=certificate
+      - xpack.license.self_generated.type=${LICENSE}
+    mem_limit: ${SEARCH_ES_MEM_LIMIT}
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "curl -s --cacert config/certs/ca/ca.crt https://localhost:9200 | grep -q 'missing authentication credentials'",
+        ]
+      interval: 10s
+      timeout: 10s
+      retries: 120
+
+  # One-shot: creates indices with proper mappings for search-as-you-type,
+  # completion suggester, and lexical search, then indexes product data.
+  search-setup:
+    image: docker.elastic.co/elasticsearch/elasticsearch:${STACK_VERSION}
+    user: "0"
+    depends_on:
+      search-es01:
+        condition: service_healthy
+    networks:
+      - net-east
+    volumes:
+      - certs:/usr/share/elasticsearch/config/certs
+    environment:
+      - ELASTIC_PASSWORD=${ELASTIC_PASSWORD}
+    command:
+      - bash
+      - -c
+      - |
+        set -e
+        CA="config/certs/ca/ca.crt"
+        ES="https://search-es01:9200"
+
+        if curl -sf --cacert $$CA -u "elastic:${ELASTIC_PASSWORD}" "$$ES/products" > /dev/null 2>&1; then
+          echo "Search indices already exist — skipping."; exit 0
+        fi
+
+        echo "=== Creating products index with search mappings ==="
+        curl -sf --cacert $$CA -u "elastic:${ELASTIC_PASSWORD}" \
+          -X PUT "$$ES/products" \
+          -H "Content-Type: application/json" \
+          -d '{
+            "settings": {
+              "number_of_shards": 1,
+              "number_of_replicas": 0,
+              "analysis": {
+                "analyzer": {
+                  "autocomplete": {
+                    "type": "custom",
+                    "tokenizer": "standard",
+                    "filter": ["lowercase", "edge_ngram_filter"]
+                  }
+                },
+                "filter": {
+                  "edge_ngram_filter": {
+                    "type": "edge_ngram",
+                    "min_gram": 2,
+                    "max_gram": 20
+                  }
+                }
+              }
+            },
+            "mappings": {
+              "properties": {
+                "name": {
+                  "type": "text",
+                  "fields": {
+                    "search_as_you_type": { "type": "search_as_you_type" },
+                    "keyword": { "type": "keyword" }
+                  }
+                },
+                "suggest": {
+                  "type": "completion"
+                },
+                "description": { "type": "text" },
+                "sku": { "type": "keyword" },
+                "category": { "type": "keyword" },
+                "price": { "type": "float" },
+                "stock": { "type": "integer" },
+                "tags": { "type": "keyword" }
+              }
+            }
+          }' && echo "  Index created"
+
+        echo "=== Indexing product catalog ==="
+        curl -sf --cacert $$CA -u "elastic:${ELASTIC_PASSWORD}" \
+          -X POST "$$ES/_bulk" \
+          -H "Content-Type: application/x-ndjson" \
+          -d '{"index":{"_index":"products","_id":"1"}}
+        {"name":"Elasticsearch Node","suggest":{"input":["Elasticsearch Node","Elasticsearch","ES Node","search engine"]},"description":"High-performance distributed search and analytics engine node. Horizontally scalable with automatic sharding, real-time indexing, and sub-second query latency across petabyte-scale datasets.","sku":"ES-NODE-01","category":"infrastructure","price":499.00,"stock":999,"tags":["search","analytics","distributed","cluster"]}
+        {"index":{"_index":"products","_id":"2"}}
+        {"name":"Kibana Dashboard Pro","suggest":{"input":["Kibana Dashboard Pro","Kibana","Dashboard","visualization"]},"description":"Advanced data visualization and exploration platform. Includes Lens, Canvas, Maps, and machine learning integration for building interactive dashboards and discovering insights.","sku":"KB-DASH-PRO","category":"visualization","price":299.00,"stock":50,"tags":["visualization","dashboard","analytics","lens"]}
+        {"index":{"_index":"products","_id":"3"}}
+        {"name":"Logstash Enterprise","suggest":{"input":["Logstash Enterprise","Logstash","log pipeline","data processing"]},"description":"Server-side data processing pipeline that ingests data from multiple sources, transforms it, and sends it to Elasticsearch. Supports 200+ input/filter/output plugins.","sku":"LS-ENT-01","category":"ingest","price":199.00,"stock":12,"tags":["pipeline","ingest","etl","transform"]}
+        {"index":{"_index":"products","_id":"4"}}
+        {"name":"APM Server Token","suggest":{"input":["APM Server Token","APM","application performance monitoring","tracing"]},"description":"Application Performance Monitoring token enabling distributed tracing, error tracking, and service map visualization across polyglot microservice architectures.","sku":"APM-TOKEN-01","category":"observability","price":99.00,"stock":0,"tags":["apm","tracing","observability","monitoring"]}
+        {"index":{"_index":"products","_id":"5"}}
+        {"name":"Fleet Server License","suggest":{"input":["Fleet Server License","Fleet","agent management","fleet server"]},"description":"Centralized agent management license for Fleet Server. Deploy, configure, and update Elastic Agents at scale across your entire infrastructure from a single Kibana UI.","sku":"FLEET-LIC-01","category":"management","price":149.00,"stock":3,"tags":["fleet","agent","management","deploy"]}
+        {"index":{"_index":"products","_id":"6"}}
+        {"name":"Synthetic Monitor Pack","suggest":{"input":["Synthetic Monitor Pack","Synthetics","uptime monitoring","browser testing"]},"description":"Browser-based synthetic monitoring pack with Playwright integration. Schedule multi-step user journeys, assert page elements, and catch outages before your users do.","sku":"SYNTH-PACK-01","category":"observability","price":79.00,"stock":25,"tags":["synthetics","monitoring","uptime","playwright"]}
+        {"index":{"_index":"products","_id":"7"}}
+        {"name":"Machine Learning Toolkit","suggest":{"input":["Machine Learning Toolkit","ML","anomaly detection","machine learning"]},"description":"Unsupervised machine learning toolkit for anomaly detection, forecasting, and outlier analysis. Automatically identifies unusual patterns in time-series data without manual rule configuration.","sku":"ML-TOOL-01","category":"analytics","price":349.00,"stock":18,"tags":["ml","anomaly","forecasting","analytics"]}
+        {"index":{"_index":"products","_id":"8"}}
+        {"name":"Security SIEM Module","suggest":{"input":["Security SIEM Module","SIEM","security","threat detection"]},"description":"Elastic Security SIEM module with pre-built detection rules, timeline investigation, and case management. Correlate events across hosts, network, and cloud providers.","sku":"SIEM-MOD-01","category":"security","price":449.00,"stock":8,"tags":["security","siem","detection","threat"]}
+        {"index":{"_index":"products","_id":"9"}}
+        {"name":"Cross-Cluster Replication License","suggest":{"input":["Cross-Cluster Replication","CCR","replication","disaster recovery"]},"description":"Bi-directional cross-cluster replication for disaster recovery and geo-distributed deployments. Replicate indices across data centers with configurable lag tolerance.","sku":"CCR-LIC-01","category":"infrastructure","price":599.00,"stock":5,"tags":["ccr","replication","dr","geo"]}
+        {"index":{"_index":"products","_id":"10"}}
+        {"name":"Elastic Agent Universal License","suggest":{"input":["Elastic Agent","Universal Agent","endpoint","agent license"]},"description":"Universal data collection agent that replaces Beats for logs, metrics, traces, and endpoint security. Managed centrally through Fleet with automatic policy updates.","sku":"AGENT-UNI-01","category":"management","price":199.00,"stock":42,"tags":["agent","endpoint","universal","fleet"]}
+        ' && echo "  Products indexed"
+
+        echo "=== Refreshing index ==="
+        curl -sf --cacert $$CA -u "elastic:${ELASTIC_PASSWORD}" \
+          -X POST "$$ES/products/_refresh" > /dev/null
+
+        echo "=== Verifying ==="
+        COUNT=$$(curl -sf --cacert $$CA -u "elastic:${ELASTIC_PASSWORD}" \
+          "$$ES/products/_count" | grep -oE '"count":[0-9]+' | cut -d: -f2)
+        echo "  $$COUNT products indexed"
+        echo "=== search-setup complete ==="
+
+  # ── Development microservices ─────────────────────────────────────────────────
+  # Development environment with ANOMALY_ENABLED=true — cascading degradation
+  # patterns fire on a 10-minute cycle to generate ML-detectable anomalies.
+  # Seven-service architecture — one service per language.
+  # See compose/cluster-east-prod.yml for the stable production copy.
+
+  east-catalog:
+    build:
+      context: ../app-east/catalog
+    networks:
+      - net-east
+    labels:
+      co.elastic.logs/enabled: "true"
+      co.elastic.logs/json.keys_under_root: "true"
+      co.elastic.logs/json.add_error_key: "true"
+      co.elastic.logs/json.message_key: "message"
+      co.elastic.logs/data_stream.namespace: "development"
+    environment:
+      - ELASTIC_APM_SERVICE_NAME=east-catalog
+      - ELASTIC_APM_SECRET_TOKEN=${ELASTIC_APM_SECRET_TOKEN}
+      - ELASTIC_APM_SERVER_URL=http://east-apm-server:8200
+      - ELASTIC_APM_ENVIRONMENT=development
+      - ANOMALY_ENABLED=true
+    depends_on:
+      - east-apm-server
+
+  east-inventory:
+    build:
+      context: ../app-east/inventory
+    networks:
+      - net-east
+    labels:
+      co.elastic.logs/enabled: "true"
+      co.elastic.logs/json.keys_under_root: "true"
+      co.elastic.logs/json.add_error_key: "true"
+      co.elastic.logs/json.message_key: "message"
+      co.elastic.logs/data_stream.namespace: "development"
+    environment:
+      - ELASTIC_APM_SERVICE_NAME=east-inventory
+      - ELASTIC_APM_SECRET_TOKEN=${ELASTIC_APM_SECRET_TOKEN}
+      - ELASTIC_APM_SERVER_URL=http://east-apm-server:8200
+      - ELASTIC_APM_ENVIRONMENT=development
+      - ANOMALY_ENABLED=true
+    depends_on:
+      - east-apm-server
+
+  east-pricing:
+    build:
+      context: ../app-east/pricing
+    networks:
+      - net-east
+    labels:
+      co.elastic.logs/enabled: "true"
+      co.elastic.logs/json.keys_under_root: "true"
+      co.elastic.logs/json.add_error_key: "true"
+      co.elastic.logs/json.message_key: "message"
+      co.elastic.logs/data_stream.namespace: "development"
+    environment:
+      - ELASTIC_APM_SERVICE_NAME=east-pricing
+      - ELASTIC_APM_SECRET_TOKEN=${ELASTIC_APM_SECRET_TOKEN}
+      - ELASTIC_APM_SERVER_URL=http://east-apm-server:8200
+      - ELASTIC_APM_ENVIRONMENT=development
+      - ANOMALY_ENABLED=true
+      - CATALOG_URL=http://east-catalog:8000
+    depends_on:
+      - east-apm-server
+
+  east-reviews:
+    build:
+      context: ../app-east/reviews
+    networks:
+      - net-east
+    labels:
+      co.elastic.logs/enabled: "true"
+      co.elastic.logs/json.keys_under_root: "true"
+      co.elastic.logs/json.add_error_key: "true"
+      co.elastic.logs/json.message_key: "message"
+      co.elastic.logs/data_stream.namespace: "development"
+    environment:
+      - ELASTIC_APM_SERVICE_NAME=east-reviews
+      - ELASTIC_APM_SECRET_TOKEN=${ELASTIC_APM_SECRET_TOKEN}
+      - ELASTIC_APM_SERVER_URL=http://east-apm-server:8200
+      - ELASTIC_APM_ENVIRONMENT=development
+      - ANOMALY_ENABLED=true
+      - CATALOG_URL=http://east-catalog:8000
+    depends_on:
+      - east-apm-server
+
+  east-orders:
+    build:
+      context: ../app-east/orders
+    networks:
+      - net-east
+    labels:
+      co.elastic.logs/enabled: "true"
+      co.elastic.logs/json.keys_under_root: "true"
+      co.elastic.logs/json.add_error_key: "true"
+      co.elastic.logs/json.message_key: "message"
+      co.elastic.logs/data_stream.namespace: "development"
+    environment:
+      - ELASTIC_APM_SERVICE_NAME=east-orders
+      - ELASTIC_APM_SECRET_TOKEN=${ELASTIC_APM_SECRET_TOKEN}
+      - ELASTIC_APM_SERVER_URL=http://east-apm-server:8200
+      - ELASTIC_APM_ENVIRONMENT=development
+      - ANOMALY_ENABLED=true
+      - INVENTORY_URL=http://east-inventory:8000
+      - PRICING_URL=http://east-pricing:8000
+    depends_on:
+      - east-apm-server
+
+  east-recommendations:
+    build:
+      context: ../app-east/recommendations
+    networks:
+      - net-east
+    labels:
+      co.elastic.logs/enabled: "true"
+      co.elastic.logs/json.keys_under_root: "true"
+      co.elastic.logs/json.add_error_key: "true"
+      co.elastic.logs/json.message_key: "message"
+      co.elastic.logs/data_stream.namespace: "development"
+    environment:
+      - ELASTIC_APM_SERVICE_NAME=east-recommendations
+      - ELASTIC_APM_SECRET_TOKEN=${ELASTIC_APM_SECRET_TOKEN}
+      # Rust service uses OTLP/HTTP to send traces to APM server
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://east-apm-server:8200
+      - ELASTIC_APM_ENVIRONMENT=development
+      - ANOMALY_ENABLED=true
+      - CATALOG_URL=http://east-catalog:8000
+      - REVIEWS_URL=http://east-reviews:8000
+    depends_on:
+      - east-apm-server
+
+  east-gateway:
+    build:
+      context: ../app-east/gateway
+    networks:
+      - net-east
+    ports:
+      - ${EAST_WEBAPP_PORT}:8000
+    labels:
+      co.elastic.logs/enabled: "true"
+      co.elastic.logs/json.keys_under_root: "true"
+      co.elastic.logs/json.add_error_key: "true"
+      co.elastic.logs/json.message_key: "message"
+      co.elastic.logs/data_stream.namespace: "development"
+    volumes:
+      - certs:/app/certs:ro
+    environment:
+      - ELASTIC_APM_SECRET_TOKEN=${ELASTIC_APM_SECRET_TOKEN}
+      - ELASTIC_APM_SERVER_URL=http://east-apm-server:8200
+      - ELASTIC_APM_ENVIRONMENT=development
+      - RUM_SERVER_URL=http://localhost:${EAST_APMSERVER_PORT}
+      - CATALOG_URL=http://east-catalog:8000
+      - INVENTORY_URL=http://east-inventory:8000
+      - PRICING_URL=http://east-pricing:8000
+      - REVIEWS_URL=http://east-reviews:8000
+      - ORDERS_URL=http://east-orders:8000
+      - RECOMMENDATIONS_URL=http://east-recommendations:8000
+      - SEARCH_ES_URL=https://search-es01:9200
+      - SEARCH_ES_PASSWORD=${ELASTIC_PASSWORD}
+      - SEARCH_ES_CA=/app/certs/ca/ca.crt
+    command:
+      - uvicorn
+      - main:app
+      - --host
+      - "0.0.0.0"
+      - --port
+      - "8000"
+      - --no-access-log
+      - --ssl-keyfile
+      - /app/certs/apps/apps.key
+      - --ssl-certfile
+      - /app/certs/apps/apps.crt
+    depends_on:
+      east-apm-server:
+        condition: service_started
+      east-catalog:
+        condition: service_started
+      east-inventory:
+        condition: service_started
+      east-pricing:
+        condition: service_started
+      east-reviews:
+        condition: service_started
+      east-orders:
+        condition: service_started
+      east-recommendations:
+        condition: service_started
+      search-es01:
+        condition: service_healthy

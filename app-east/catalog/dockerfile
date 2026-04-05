@@ -1,0 +1,21 @@
+# syntax=docker/dockerfile:1
+# ── Build stage ───────────────────────────────────────────────────────────────
+FROM maven:3.9-eclipse-temurin-17 AS build
+WORKDIR /app
+# Copy pom first so dependency downloads are cached separately from source
+COPY pom.xml .
+RUN mvn dependency:go-offline -q
+COPY src/ src/
+RUN mvn package -DskipTests -q
+
+# ── Runtime stage ─────────────────────────────────────────────────────────────
+FROM eclipse-temurin:17-jre
+WORKDIR /app
+COPY --from=build /app/target/catalog-*.jar        app.jar
+COPY --from=build /app/target/elastic-apm-agent.jar elastic-apm-agent.jar
+
+# APM agent is attached as a JVM agent; all config via environment variables:
+#   ELASTIC_APM_SERVICE_NAME, ELASTIC_APM_SERVER_URL, ELASTIC_APM_SECRET_TOKEN
+CMD ["java", \
+     "-javaagent:/app/elastic-apm-agent.jar", \
+     "-jar", "/app/app.jar"]

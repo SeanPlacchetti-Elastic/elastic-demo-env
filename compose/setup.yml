@@ -1,0 +1,187 @@
+services:
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # SETUP: TLS certificates, passwords, CCS config, roles, and users
+  # ─────────────────────────────────────────────────────────────────────────────
+  setup:
+    image: docker.elastic.co/elasticsearch/elasticsearch:${STACK_VERSION}
+    networks:
+      - net-west
+      - net-east
+    volumes:
+      - certs:/usr/share/elasticsearch/config/certs
+    user: "0"
+    command: >
+      bash -c '
+        if [ x${ELASTIC_PASSWORD} == x ]; then
+          echo "Set the ELASTIC_PASSWORD environment variable in the .env file";
+          exit 1;
+        elif [ x${KIBANA_PASSWORD} == x ]; then
+          echo "Set the KIBANA_PASSWORD environment variable in the .env file";
+          exit 1;
+        fi;
+        if [ ! -f config/certs/ca.zip ]; then
+          echo "Creating CA";
+          bin/elasticsearch-certutil ca --silent --pem -out config/certs/ca.zip;
+          unzip config/certs/ca.zip -d config/certs;
+        fi;
+        if [ ! -f config/certs/apps/apps.crt ]; then
+          echo "Creating shared app certificate (west-webapp, east-gateway, landing)";
+          echo -ne \
+          "instances:\n"\
+          "  - name: apps\n"\
+          "    dns:\n"\
+          "      - west-webapp\n"\
+          "      - east-gateway\n"\
+          "      - prod-gateway\n"\
+          "      - landing\n"\
+          "      - localhost\n"\
+          "    ip:\n"\
+          "      - 127.0.0.1\n"\
+          > config/certs/apps-instances.yml;
+          bin/elasticsearch-certutil cert --silent --pem -out config/certs/apps-certs.zip \
+            --in config/certs/apps-instances.yml \
+            --ca-cert config/certs/ca/ca.crt \
+            --ca-key config/certs/ca/ca.key;
+          unzip config/certs/apps-certs.zip -d config/certs;
+        fi;
+        if [ ! -f config/certs/certs.zip ]; then
+          echo "Creating node and service certificates";
+          echo -ne \
+          "instances:\n"\
+          "  - name: west-es01\n"\
+          "    dns:\n"\
+          "      - west-es01\n"\
+          "      - localhost\n"\
+          "    ip:\n"\
+          "      - 127.0.0.1\n"\
+          "  - name: west-es02\n"\
+          "    dns:\n"\
+          "      - west-es02\n"\
+          "      - localhost\n"\
+          "    ip:\n"\
+          "      - 127.0.0.1\n"\
+          "  - name: west-es03\n"\
+          "    dns:\n"\
+          "      - west-es03\n"\
+          "      - localhost\n"\
+          "    ip:\n"\
+          "      - 127.0.0.1\n"\
+          "  - name: east-es01\n"\
+          "    dns:\n"\
+          "      - east-es01\n"\
+          "      - localhost\n"\
+          "    ip:\n"\
+          "      - 127.0.0.1\n"\
+          "  - name: east-es02\n"\
+          "    dns:\n"\
+          "      - east-es02\n"\
+          "      - localhost\n"\
+          "    ip:\n"\
+          "      - 127.0.0.1\n"\
+          "  - name: east-es03\n"\
+          "    dns:\n"\
+          "      - east-es03\n"\
+          "      - localhost\n"\
+          "    ip:\n"\
+          "      - 127.0.0.1\n"\
+          "  - name: search-es01\n"\
+          "    dns:\n"\
+          "      - search-es01\n"\
+          "      - localhost\n"\
+          "    ip:\n"\
+          "      - 127.0.0.1\n"\
+          "  - name: kibana-west\n"\
+          "    dns:\n"\
+          "      - kibana-west\n"\
+          "      - localhost\n"\
+          "    ip:\n"\
+          "      - 127.0.0.1\n"\
+          "  - name: kibana-east\n"\
+          "    dns:\n"\
+          "      - kibana-east\n"\
+          "      - localhost\n"\
+          "    ip:\n"\
+          "      - 127.0.0.1\n"\
+          "  - name: west-apm-server\n"\
+          "    dns:\n"\
+          "      - west-apm-server\n"\
+          "      - localhost\n"\
+          "    ip:\n"\
+          "      - 127.0.0.1\n"\
+          "  - name: east-apm-server\n"\
+          "    dns:\n"\
+          "      - east-apm-server\n"\
+          "      - localhost\n"\
+          "    ip:\n"\
+          "      - 127.0.0.1\n"\
+          "  - name: fleet-server\n"\
+          "    dns:\n"\
+          "      - fleet-server\n"\
+          "      - localhost\n"\
+          "    ip:\n"\
+          "      - 127.0.0.1\n"\
+          > config/certs/instances.yml;
+          bin/elasticsearch-certutil cert --silent --pem -out config/certs/certs.zip --in config/certs/instances.yml --ca-cert config/certs/ca/ca.crt --ca-key config/certs/ca/ca.key;
+          unzip config/certs/certs.zip -d config/certs;
+        fi;
+        echo "Setting file permissions";
+        chown -R root:root config/certs;
+        find . -type d -exec chmod 750 \{\} \;;
+        find . -type f -exec chmod 640 \{\} \;;
+
+        echo "=== Waiting for cluster-west (west-es01) ===";
+        until curl -s --cacert config/certs/ca/ca.crt https://west-es01:9200 | grep -q "missing authentication credentials"; do sleep 30; done;
+        echo "Setting kibana_system password on cluster-west";
+        until curl -s -X POST --cacert config/certs/ca/ca.crt -u "elastic:${ELASTIC_PASSWORD}" -H "Content-Type: application/json" https://west-es01:9200/_security/user/kibana_system/_password -d "{\"password\":\"${KIBANA_PASSWORD}\"}" | grep -q "^{}"; do sleep 10; done;
+
+        echo "=== Waiting for cluster-east (east-es01) ===";
+        until curl -s --cacert config/certs/ca/ca.crt https://east-es01:9200 | grep -q "missing authentication credentials"; do sleep 30; done;
+        echo "Setting kibana_system password on cluster-east";
+        until curl -s -X POST --cacert config/certs/ca/ca.crt -u "elastic:${ELASTIC_PASSWORD}" -H "Content-Type: application/json" https://east-es01:9200/_security/user/kibana_system/_password -d "{\"password\":\"${EAST_KIBANA_PASSWORD}\"}" | grep -q "^{}"; do sleep 10; done;
+
+        echo "=== Creating east-admin user on cluster-east ===";
+        until curl -s -X PUT --cacert config/certs/ca/ca.crt -u "elastic:${ELASTIC_PASSWORD}" -H "Content-Type: application/json" https://east-es01:9200/_security/user/east-admin -d "{\"password\":\"EastAdmin1!\",\"roles\":[\"superuser\"],\"full_name\":\"East Cluster Admin\",\"email\":\"east-admin@example.com\"}" | grep -q "\"created\""; do sleep 10; done;
+
+        echo "=== Registering cluster-east as remote cluster on cluster-west (CCS proxy mode) ===";
+        until curl -s -X PUT --cacert config/certs/ca/ca.crt -u "elastic:${ELASTIC_PASSWORD}" -H "Content-Type: application/json" https://west-es01:9200/_cluster/settings -d "{\"persistent\":{\"cluster.remote.cluster-east.mode\":\"proxy\",\"cluster.remote.cluster-east.proxy_address\":\"east-es01:9300\",\"cluster.remote.cluster-east.proxy_socket_connections\":3,\"cluster.remote.cluster-east.skip_unavailable\":true}}" | grep -q "\"acknowledged\":true"; do sleep 10; done;
+
+        echo "=== Creating CCS roles on cluster-west ===";
+        curl -s -X PUT --cacert config/certs/ca/ca.crt -u "elastic:${ELASTIC_PASSWORD}" -H "Content-Type: application/json" https://west-es01:9200/_security/role/ccs-full-analyst -d "{\"cluster\":[\"monitor\"],\"indices\":[{\"names\":[\"*\"],\"privileges\":[\"read\",\"view_index_metadata\"]},{\"names\":[\"cluster-east:*\"],\"privileges\":[\"read\",\"view_index_metadata\"]}],\"description\":\"Full read access to cluster-west AND cluster-east data via CCS\"}";
+        curl -s -X PUT --cacert config/certs/ca/ca.crt -u "elastic:${ELASTIC_PASSWORD}" -H "Content-Type: application/json" https://west-es01:9200/_security/role/west-local-analyst -d "{\"cluster\":[\"monitor\"],\"indices\":[{\"names\":[\"*\"],\"privileges\":[\"read\",\"view_index_metadata\"]}],\"description\":\"Read access to cluster-west local indices only - no cross-cluster access\"}";
+
+        echo "=== Creating demo users on cluster-west ===";
+        curl -s -X PUT --cacert config/certs/ca/ca.crt -u "elastic:${ELASTIC_PASSWORD}" -H "Content-Type: application/json" https://west-es01:9200/_security/user/ccs-analyst -d "{\"password\":\"CcsAnalyst1!\",\"roles\":[\"ccs-full-analyst\"],\"full_name\":\"CCS Data Analyst\",\"email\":\"ccs-analyst@example.com\"}";
+        curl -s -X PUT --cacert config/certs/ca/ca.crt -u "elastic:${ELASTIC_PASSWORD}" -H "Content-Type: application/json" https://west-es01:9200/_security/user/west-analyst -d "{\"password\":\"WestAnalyst1!\",\"roles\":[\"west-local-analyst\"],\"full_name\":\"West Local Analyst\",\"email\":\"west-analyst@example.com\"}";
+
+        echo "=== Creating ccs-analyst on cluster-east for cross-cluster auth ===";
+        curl -s -X PUT --cacert config/certs/ca/ca.crt -u "elastic:${ELASTIC_PASSWORD}" -H "Content-Type: application/json" https://east-es01:9200/_security/user/ccs-analyst -d "{\"password\":\"CcsAnalyst1!\",\"roles\":[\"viewer\"],\"full_name\":\"CCS Data Analyst (remote)\",\"email\":\"ccs-analyst@example.com\"}";
+
+        echo "=== Creating Fleet Server service token on east-es01 (idempotent) ===";
+        mkdir -p config/certs/tokens;
+        if [ ! -s config/certs/tokens/fleet-service-token ]; then
+          curl -s -X DELETE --cacert config/certs/ca/ca.crt -u "elastic:${ELASTIC_PASSWORD}" \
+            https://east-es01:9200/_security/service/elastic/fleet-server/credential/token/fleet-token-1 2>/dev/null;
+          curl -s -X POST --cacert config/certs/ca/ca.crt -u "elastic:${ELASTIC_PASSWORD}" \
+            https://east-es01:9200/_security/service/elastic/fleet-server/credential/token/fleet-token-1 \
+            | sed -n "s/.*\"value\":\"\([^\"]*\)\".*/\1/p" > config/certs/tokens/fleet-service-token;
+          chmod 640 config/certs/tokens/fleet-service-token;
+          echo "Fleet service token written.";
+        else
+          echo "Fleet service token already present, skipping.";
+        fi;
+
+        echo "=== All done! Summary ===";
+        echo "  West Kibana  : https://localhost:${KIBANA_PORT}  — login: elastic / ${ELASTIC_PASSWORD}";
+        echo "  East Kibana  : https://localhost:${EAST_KIBANA_PORT} — login: east-admin / EastAdmin1!";
+        echo "  CCS analyst  : login to West Kibana as ccs-analyst / CcsAnalyst1!  (sees both clusters)";
+        echo "  Local analyst: login to West Kibana as west-analyst / WestAnalyst1! (sees west only)";
+        echo "  CCS query    : GET /cluster-east:filebeat-*/_search from west cluster";
+        echo "=== Setup complete, staying alive for healthcheck ===";
+        tail -f /dev/null
+      '
+    healthcheck:
+      test: ["CMD-SHELL", "[ -f config/certs/west-es01/west-es01.crt ]"]
+      interval: 1s
+      timeout: 5s
+      retries: 120

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+  <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
+    <encoder class="co.elastic.logging.logback.EcsEncoder">
+      <serviceName>east-catalog</serviceName>
+      <serviceVersion>1.0.0</serviceVersion>
+    </encoder>
+  </appender>
+  <root level="INFO">
+    <appender-ref ref="STDOUT"/>
+  </root>
+  <!-- Suppress noisy Spring startup logs -->
+  <logger name="org.springframework" level="WARN"/>
+  <logger name="org.apache.catalina" level="WARN"/>
+</configuration>

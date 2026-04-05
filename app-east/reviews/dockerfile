@@ -1,0 +1,35 @@
+# syntax=docker/dockerfile:1
+FROM php:8.2-cli
+
+WORKDIR /app
+
+# Install Composer and system dependencies
+COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
+RUN apt-get update && apt-get install -y --no-install-recommends curl unzip && \
+    rm -rf /var/lib/apt/lists/*
+
+# Install the official Elastic APM PHP agent (C extension).
+# The _linux_all package covers both amd64 and arm64.
+# Update AGENT_VERSION if a newer release is available.
+# Install the Elastic APM PHP agent (C extension) if a package is available for
+# this platform. Pre-built arm64 packages were introduced in later releases, so
+# this step is best-effort: the service still runs with ECS logging if skipped.
+ARG AGENT_VERSION=1.10.0
+RUN set -e; \
+    ARCH="$(dpkg --print-architecture)"; \
+    BASE="https://github.com/elastic/apm-agent-php/releases/download/v${AGENT_VERSION}"; \
+    for PKG in "apm-agent-php_linux_${ARCH}.deb" "apm-agent-php_linux_all.deb"; do \
+        if curl -sSLf "${BASE}/${PKG}" -o /tmp/apm-agent-php.deb 2>/dev/null; then \
+            dpkg -i /tmp/apm-agent-php.deb && rm /tmp/apm-agent-php.deb && break; \
+        fi; \
+    done; \
+    echo "APM agent install step complete (skipped if no package found for ${ARCH})"
+
+# Install Composer dependencies
+COPY composer.json .
+RUN composer install --no-dev --no-interaction --optimize-autoloader
+
+COPY public/ public/
+
+# Use the PHP built-in server for this demo (sufficient for local use)
+CMD ["php", "-S", "0.0.0.0:8000", "-t", "public"]

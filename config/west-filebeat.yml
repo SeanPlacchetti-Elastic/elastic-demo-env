@@ -1,0 +1,33 @@
+filebeat.inputs:
+# Air quality sensor data — environmental monitoring logs
+- type: filestream
+  id: west-air-quality
+  paths:
+    - ingest_data/air-quality/*.log
+
+# Application event logs — order processing, payments, notifications (structured JSON)
+- type: filestream
+  id: west-app-events
+  paths:
+    - ingest_data/app-events/*.log
+
+filebeat.autodiscover:
+  providers:
+    - type: docker
+      hints.enabled: true
+
+processors:
+- add_docker_metadata: ~
+
+setup.kibana:
+  host: ${KIBANA_HOSTS}
+  username: ${ELASTIC_USER}
+  password: ${ELASTIC_PASSWORD}
+
+output.elasticsearch:
+  hosts: ${ELASTIC_HOSTS}
+  username: ${ELASTIC_USER}
+  password: ${ELASTIC_PASSWORD}
+  ssl:
+    enabled: true
+    certificate_authorities: ${CA_CERT}

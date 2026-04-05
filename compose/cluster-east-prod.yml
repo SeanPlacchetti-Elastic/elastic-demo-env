@@ -1,0 +1,230 @@
+services:
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # PRODUCTION MICROSERVICES — stable, no programmed anomalies
+  # Same services as the development set (east-*) but with ANOMALY_ENABLED unset
+  # and ELASTIC_APM_ENVIRONMENT=production.  Own APM server writes to the
+  # "production" data stream namespace. Gateway at https://localhost:8002
+  # ─────────────────────────────────────────────────────────────────────────────
+
+  # Production APM server — writes to traces-apm-production, metrics-apm.*-production
+  prod-apm-server:
+    depends_on:
+      east-es01:
+        condition: service_healthy
+    image: docker.elastic.co/apm/apm-server:${STACK_VERSION}
+    user: root
+    networks:
+      - net-east
+    volumes:
+      - certs:/usr/share/apm-server/certs
+    command: >
+      apm-server -e
+         -E output.elasticsearch.hosts=["east-es01:9200"]
+         -E output.elasticsearch.protocol=https
+         -E output.elasticsearch.username=elastic
+         -E output.elasticsearch.password=${ELASTIC_PASSWORD}
+         -E output.elasticsearch.ssl.enabled=true
+         -E output.elasticsearch.ssl.certificate_authorities=/usr/share/apm-server/certs/ca/ca.crt
+         -E output.elasticsearch.ssl.certificate=/usr/share/apm-server/certs/east-apm-server/east-apm-server.crt
+         -E output.elasticsearch.ssl.key=/usr/share/apm-server/certs/east-apm-server/east-apm-server.key
+         -E apm-server.rum.enabled=true
+         -E apm-server.rum.allow_origins=["*"]
+         -E apm-server.rum.allow_headers=["content-type"]
+         -E apm-server.data_streams.namespace=production
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - SETGID
+      - SETUID
+    logging:
+      driver: 'json-file'
+      options:
+        max-size: '2m'
+        max-file: '5'
+    healthcheck:
+      test: ["CMD", "curl", "--write-out", "'HTTP %{http_code}'", "--silent", "--output", "/dev/null", "http://localhost:8200/healthcheck"]
+      interval: 10s
+      timeout: 10s
+      retries: 120
+
+  prod-catalog:
+    build:
+      context: ../app-east/catalog
+    networks:
+      - net-east
+    labels:
+      co.elastic.logs/enabled: "true"
+      co.elastic.logs/json.keys_under_root: "true"
+      co.elastic.logs/json.add_error_key: "true"
+      co.elastic.logs/json.message_key: "message"
+      co.elastic.logs/data_stream.namespace: "production"
+    environment:
+      - ELASTIC_APM_SERVICE_NAME=east-catalog
+      - ELASTIC_APM_SECRET_TOKEN=${ELASTIC_APM_SECRET_TOKEN}
+      - ELASTIC_APM_SERVER_URL=http://prod-apm-server:8200
+      - ELASTIC_APM_ENVIRONMENT=production
+    depends_on:
+      - prod-apm-server
+
+  prod-inventory:
+    build:
+      context: ../app-east/inventory
+    networks:
+      - net-east
+    labels:
+      co.elastic.logs/enabled: "true"
+      co.elastic.logs/json.keys_under_root: "true"
+      co.elastic.logs/json.add_error_key: "true"
+      co.elastic.logs/json.message_key: "message"
+      co.elastic.logs/data_stream.namespace: "production"
+    environment:
+      - ELASTIC_APM_SERVICE_NAME=east-inventory
+      - ELASTIC_APM_SECRET_TOKEN=${ELASTIC_APM_SECRET_TOKEN}
+      - ELASTIC_APM_SERVER_URL=http://prod-apm-server:8200
+      - ELASTIC_APM_ENVIRONMENT=production
+    depends_on:
+      - prod-apm-server
+
+  prod-pricing:
+    build:
+      context: ../app-east/pricing
+    networks:
+      - net-east
+    labels:
+      co.elastic.logs/enabled: "true"
+      co.elastic.logs/json.keys_under_root: "true"
+      co.elastic.logs/json.add_error_key: "true"
+      co.elastic.logs/json.message_key: "message"
+      co.elastic.logs/data_stream.namespace: "production"
+    environment:
+      - ELASTIC_APM_SERVICE_NAME=east-pricing
+      - ELASTIC_APM_SECRET_TOKEN=${ELASTIC_APM_SECRET_TOKEN}
+      - ELASTIC_APM_SERVER_URL=http://prod-apm-server:8200
+      - ELASTIC_APM_ENVIRONMENT=production
+      - CATALOG_URL=http://prod-catalog:8000
+    depends_on:
+      - prod-apm-server
+
+  prod-reviews:
+    build:
+      context: ../app-east/reviews
+    networks:
+      - net-east
+    labels:
+      co.elastic.logs/enabled: "true"
+      co.elastic.logs/json.keys_under_root: "true"
+      co.elastic.logs/json.add_error_key: "true"
+      co.elastic.logs/json.message_key: "message"
+      co.elastic.logs/data_stream.namespace: "production"
+    environment:
+      - ELASTIC_APM_SERVICE_NAME=east-reviews
+      - ELASTIC_APM_SECRET_TOKEN=${ELASTIC_APM_SECRET_TOKEN}
+      - ELASTIC_APM_SERVER_URL=http://prod-apm-server:8200
+      - ELASTIC_APM_ENVIRONMENT=production
+      - CATALOG_URL=http://prod-catalog:8000
+    depends_on:
+      - prod-apm-server
+
+  prod-orders:
+    build:
+      context: ../app-east/orders
+    networks:
+      - net-east
+    labels:
+      co.elastic.logs/enabled: "true"
+      co.elastic.logs/json.keys_under_root: "true"
+      co.elastic.logs/json.add_error_key: "true"
+      co.elastic.logs/json.message_key: "message"
+      co.elastic.logs/data_stream.namespace: "production"
+    environment:
+      - ELASTIC_APM_SERVICE_NAME=east-orders
+      - ELASTIC_APM_SECRET_TOKEN=${ELASTIC_APM_SECRET_TOKEN}
+      - ELASTIC_APM_SERVER_URL=http://prod-apm-server:8200
+      - ELASTIC_APM_ENVIRONMENT=production
+      - INVENTORY_URL=http://prod-inventory:8000
+      - PRICING_URL=http://prod-pricing:8000
+    depends_on:
+      - prod-apm-server
+
+  prod-recommendations:
+    build:
+      context: ../app-east/recommendations
+    networks:
+      - net-east
+    labels:
+      co.elastic.logs/enabled: "true"
+      co.elastic.logs/json.keys_under_root: "true"
+      co.elastic.logs/json.add_error_key: "true"
+      co.elastic.logs/json.message_key: "message"
+      co.elastic.logs/data_stream.namespace: "production"
+    environment:
+      - ELASTIC_APM_SERVICE_NAME=east-recommendations
+      - ELASTIC_APM_SECRET_TOKEN=${ELASTIC_APM_SECRET_TOKEN}
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://prod-apm-server:8200
+      - ELASTIC_APM_ENVIRONMENT=production
+      - CATALOG_URL=http://prod-catalog:8000
+      - REVIEWS_URL=http://prod-reviews:8000
+    depends_on:
+      - prod-apm-server
+
+  prod-gateway:
+    build:
+      context: ../app-east/gateway
+    networks:
+      - net-east
+    ports:
+      - ${PROD_WEBAPP_PORT}:8000
+    labels:
+      co.elastic.logs/enabled: "true"
+      co.elastic.logs/json.keys_under_root: "true"
+      co.elastic.logs/json.add_error_key: "true"
+      co.elastic.logs/json.message_key: "message"
+      co.elastic.logs/data_stream.namespace: "production"
+    volumes:
+      - certs:/app/certs:ro
+    environment:
+      - ELASTIC_APM_SECRET_TOKEN=${ELASTIC_APM_SECRET_TOKEN}
+      - ELASTIC_APM_SERVER_URL=http://prod-apm-server:8200
+      - ELASTIC_APM_ENVIRONMENT=production
+      - RUM_SERVER_URL=http://localhost:${EAST_APMSERVER_PORT}
+      - CATALOG_URL=http://prod-catalog:8000
+      - INVENTORY_URL=http://prod-inventory:8000
+      - PRICING_URL=http://prod-pricing:8000
+      - REVIEWS_URL=http://prod-reviews:8000
+      - ORDERS_URL=http://prod-orders:8000
+      - RECOMMENDATIONS_URL=http://prod-recommendations:8000
+      - SEARCH_ES_URL=https://search-es01:9200
+      - SEARCH_ES_PASSWORD=${ELASTIC_PASSWORD}
+      - SEARCH_ES_CA=/app/certs/ca/ca.crt
+    command:
+      - uvicorn
+      - main:app
+      - --host
+      - "0.0.0.0"
+      - --port
+      - "8000"
+      - --no-access-log
+      - --ssl-keyfile
+      - /app/certs/apps/apps.key
+      - --ssl-certfile
+      - /app/certs/apps/apps.crt
+    depends_on:
+      prod-apm-server:
+        condition: service_started
+      prod-catalog:
+        condition: service_started
+      prod-inventory:
+        condition: service_started
+      prod-pricing:
+        condition: service_started
+      prod-reviews:
+        condition: service_started
+      prod-orders:
+        condition: service_started
+      prod-recommendations:
+        condition: service_started
+      search-es01:
+        condition: service_healthy
