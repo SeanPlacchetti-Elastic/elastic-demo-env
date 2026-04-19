@@ -157,6 +157,11 @@ services:
         echo "=== Creating ccs-analyst on cluster-east for cross-cluster auth ===";
         curl -s -X PUT --cacert config/certs/ca/ca.crt -u "elastic:${ELASTIC_PASSWORD}" -H "Content-Type: application/json" https://east-es01:9200/_security/user/ccs-analyst -d "{\"password\":\"CcsAnalyst1!\",\"roles\":[\"viewer\"],\"full_name\":\"CCS Data Analyst (remote)\",\"email\":\"ccs-analyst@example.com\"}";
 
+        echo "=== Waiting for search cluster (search-es01) ===";
+        until curl -s --cacert config/certs/ca/ca.crt https://search-es01:9200 | grep -q "missing authentication credentials"; do sleep 30; done;
+        echo "Setting kibana_system password on search cluster";
+        until curl -s -X POST --cacert config/certs/ca/ca.crt -u "elastic:${ELASTIC_PASSWORD}" -H "Content-Type: application/json" https://search-es01:9200/_security/user/kibana_system/_password -d "{\"password\":\"${SEARCH_KIBANA_PASSWORD}\"}" | grep -q "^{}"; do sleep 10; done;
+
         echo "=== Creating Fleet Server service token on east-es01 (idempotent) ===";
         mkdir -p config/certs/tokens;
         if [ ! -s config/certs/tokens/fleet-service-token ]; then
@@ -172,8 +177,9 @@ services:
         fi;
 
         echo "=== All done! Summary ===";
-        echo "  West Kibana  : https://localhost:${KIBANA_PORT}  — login: elastic / ${ELASTIC_PASSWORD}";
-        echo "  East Kibana  : https://localhost:${EAST_KIBANA_PORT} — login: east-admin / EastAdmin1!";
+        echo "  West Kibana   : https://localhost:${KIBANA_PORT}  — login: elastic / ${ELASTIC_PASSWORD}";
+        echo "  East Kibana   : https://localhost:${EAST_KIBANA_PORT} — login: east-admin / EastAdmin1!";
+        echo "  Search Kibana : https://localhost:${SEARCH_KIBANA_PORT} — login: elastic / ${ELASTIC_PASSWORD}";
         echo "  CCS analyst  : login to West Kibana as ccs-analyst / CcsAnalyst1!  (sees both clusters)";
         echo "  Local analyst: login to West Kibana as west-analyst / WestAnalyst1! (sees west only)";
         echo "  CCS query    : GET /cluster-east:filebeat-*/_search from west cluster";

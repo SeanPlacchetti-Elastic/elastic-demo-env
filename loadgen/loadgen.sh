@@ -20,6 +20,23 @@ cycle=0
 while true; do
     cycle=$((cycle + 1))
 
+    # ── Aircraft registry search queries (rotated by cycle) ──────────────
+    # These drive traffic through all three search modes against the aircraft
+    # index so APM captures search spans and ML has latency data to train on.
+    SEARCH_TERMS="KC-135 tanker boom Pegasus Stratotanker F-16 striker B-52 bomber Extender receiver"
+    TERM=$(echo $SEARCH_TERMS | tr ' ' '\n' | sed -n "$((cycle % 10 + 1))p")
+    SEARCH_MODE=$((cycle % 3))
+    if [ "$SEARCH_MODE" -eq 0 ]; then
+        $C "$DEV_GW/search?q=$(echo "$TERM" | sed 's/ /%20/g')"           -o /dev/null 2>/dev/null &
+        $C "$PROD_GW/search?q=$(echo "$TERM" | sed 's/ /%20/g')"          -o /dev/null 2>/dev/null &
+    elif [ "$SEARCH_MODE" -eq 1 ]; then
+        $C "$DEV_GW/search/asyoutype?q=$(echo "$TERM" | sed 's/ /%20/g')" -o /dev/null 2>/dev/null &
+        $C "$PROD_GW/search/asyoutype?q=$(echo "$TERM" | sed 's/ /%20/g')" -o /dev/null 2>/dev/null &
+    else
+        $C "$DEV_GW/search/typeahead?q=$(echo "$TERM" | sed 's/ /%20/g')" -o /dev/null 2>/dev/null &
+        $C "$PROD_GW/search/typeahead?q=$(echo "$TERM" | sed 's/ /%20/g')" -o /dev/null 2>/dev/null &
+    fi
+
     # ── Development gateway (anomalies enabled) ───────────────────────────
     $C "$DEV_GW/catalog"         -o /dev/null 2>/dev/null &
     $C "$DEV_GW/inventory"       -o /dev/null 2>/dev/null &

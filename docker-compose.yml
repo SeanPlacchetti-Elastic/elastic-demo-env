@@ -34,6 +34,8 @@ volumes:
   # Search cluster data
   search-esdata01:
     driver: local
+  search-kibanadata:
+    driver: local
   # Kibana data
   west-kibanadata:
     driver: local
@@ -52,6 +54,20 @@ volumes:
   fleet-server-data:
     driver: local
   agent-synthetics-data:
+    driver: local
+  # Microservice databases
+  catalog-pgdata:
+    driver: local
+  orders-mysqldata:
+    driver: local
+  reviews-mongodata:
+    driver: local
+  pricing-mssqldata:
+    driver: local
+  # Security beats (Packetbeat + Auditbeat)
+  east-packetbeatdata:
+    driver: local
+  east-auditbeatdata:
     driver: local
 
 # ── Shared networks ───────────────────────────────────────────────────────────

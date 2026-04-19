@@ -25,6 +25,9 @@ RUN set -e; \
     done; \
     echo "APM agent install step complete (skipped if no package found for ${ARCH})"
 
+# Install MongoDB PHP extension
+RUN pecl install mongodb && docker-php-ext-enable mongodb
+
 # Install Composer dependencies
 COPY composer.json .
 RUN composer install --no-dev --no-interaction --optimize-autoloader

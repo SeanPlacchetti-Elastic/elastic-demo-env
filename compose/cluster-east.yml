@@ -333,8 +333,12 @@ services:
       timeout: 10s
       retries: 120
 
-  # One-shot: creates indices with proper mappings for search-as-you-type,
-  # completion suggester, and lexical search, then indexes product data.
+  # One-shot: creates four search indices with mappings and bulk data.
+  # aircraft   — 10 USAF aircraft with search-as-you-type and completion suggester
+  # missions   — 10 refueling missions; tanker + receiver aircraft details denormalized in
+  # airbases   — 8 USAF air bases with geo_point locations
+  # crews      — 12 aircrew; primary_airframe details denormalized in
+  # Sentinel: checks for the crews index (new) so re-runs if only aircraft exists.
   search-setup:
     image: docker.elastic.co/elasticsearch/elasticsearch:${STACK_VERSION}
     user: "0"
@@ -355,92 +359,352 @@ services:
         CA="config/certs/ca/ca.crt"
         ES="https://search-es01:9200"
 
-        if curl -sf --cacert $$CA -u "elastic:${ELASTIC_PASSWORD}" "$$ES/products" > /dev/null 2>&1; then
+        if curl -sf --cacert $$CA -u "elastic:${ELASTIC_PASSWORD}" "$$ES/crews" > /dev/null 2>&1; then
           echo "Search indices already exist — skipping."; exit 0
         fi
 
-        echo "=== Creating products index with search mappings ==="
+        echo "=== Dropping any existing search indices ==="
+        for IDX in aircraft missions airbases crews; do
+          curl -sf --cacert $$CA -u "elastic:${ELASTIC_PASSWORD}" \
+            -X DELETE "$$ES/$$IDX" > /dev/null 2>&1 || true
+        done
+
+        SEARCH_SETTINGS='{"number_of_shards":1,"number_of_replicas":0,"analysis":{"analyzer":{"autocomplete":{"type":"custom","tokenizer":"standard","filter":["lowercase","edge_ngram_filter"]}},"filter":{"edge_ngram_filter":{"type":"edge_ngram","min_gram":2,"max_gram":20}}}}'
+
+        # ── aircraft ──────────────────────────────────────────────────────────────
+        echo "=== Creating aircraft index ==="
         curl -sf --cacert $$CA -u "elastic:${ELASTIC_PASSWORD}" \
-          -X PUT "$$ES/products" \
+          -X PUT "$$ES/aircraft" -H "Content-Type: application/json" \
+          -d "{\"settings\":$$SEARCH_SETTINGS,\"mappings\":{\"properties\":{\"name\":{\"type\":\"text\",\"fields\":{\"search_as_you_type\":{\"type\":\"search_as_you_type\"},\"keyword\":{\"type\":\"keyword\"}}},\"suggest\":{\"type\":\"completion\"},\"description\":{\"type\":\"text\"},\"sku\":{\"type\":\"keyword\"},\"designation\":{\"type\":\"keyword\"},\"category\":{\"type\":\"keyword\"},\"role\":{\"type\":\"keyword\"},\"fuel_capacity_lbs\":{\"type\":\"float\"},\"fleet_count\":{\"type\":\"integer\"},\"primary_base\":{\"type\":\"keyword\"},\"tags\":{\"type\":\"keyword\"}}}}" \
+          && echo "  aircraft index created"
+
+        cat > /tmp/aircraft.ndjson << 'ENDBULK'
+        {"index":{"_index":"aircraft","_id":"1"}}
+        {"name":"KC-135 Stratotanker","suggest":{"input":["KC-135 Stratotanker","KC-135","Stratotanker","tanker","TANKER-135"]},"description":"Primary USAF aerial refueling tanker. Boom-equipped, offloads up to 150,000 lbs per sortie. Backbone of USAF aerial refueling since 1956, deployed across all major bases worldwide.","sku":"TANKER-135","designation":"TANKER-135","category":"tanker","role":"tanker","fuel_capacity_lbs":200000,"fleet_count":398,"primary_base":"fairchild-afb","tags":["tanker","boom","aerial-refueling","strategic","KC-135","AMC"]}
+        {"index":{"_index":"aircraft","_id":"2"}}
+        {"name":"KC-46A Pegasus","suggest":{"input":["KC-46A Pegasus","KC-46","Pegasus","tanker","TANKER-46A"]},"description":"Next-generation refueling tanker replacing the KC-135. Remote vision system boom, centerline drogue, and wing drogues enable simultaneous multi-receiver operations. Offloads over 207,000 lbs per sortie.","sku":"TANKER-46A","designation":"TANKER-46A","category":"tanker","role":"tanker","fuel_capacity_lbs":212000,"fleet_count":68,"primary_base":"mcconnell-afb","tags":["tanker","boom","drogue","RVS","KC-46","next-gen","AMC"]}
+        {"index":{"_index":"aircraft","_id":"3"}}
+        {"name":"KC-10 Extender","suggest":{"input":["KC-10 Extender","KC-10","Extender","tanker","TANKER-10"]},"description":"Large tanker-transport with the highest fuel offload capacity in the fleet at 356,000 lbs. Supports boom and drogue simultaneously. Critical for long-range strike packages and strategic airlift missions.","sku":"TANKER-10","designation":"TANKER-10","category":"tanker","role":"tanker","fuel_capacity_lbs":356000,"fleet_count":59,"primary_base":"raf-mildenhall","tags":["tanker","boom","drogue","strategic","KC-10","high-capacity","AMC"]}
+        {"index":{"_index":"aircraft","_id":"4"}}
+        {"name":"F-16C Fighting Falcon","suggest":{"input":["F-16C Fighting Falcon","F-16","Fighting Falcon","Viper","fighter","RECEIVER-F16C"]},"description":"Multi-role fighter with boom receptacle. Fuel capacity 7,000 lbs. Employed in CAS, tactical strike, and air defense. Requires mid-mission refueling for extended range sorties.","sku":"RECEIVER-F16C","designation":"RECEIVER-F16C","category":"fighter","role":"receiver","fuel_capacity_lbs":7000,"fleet_count":783,"primary_base":"ramstein-ab","tags":["fighter","receiver","boom-receptacle","tactical","F-16","CAS","USAFE"]}
+        {"index":{"_index":"aircraft","_id":"5"}}
+        {"name":"F-15E Strike Eagle","suggest":{"input":["F-15E Strike Eagle","F-15E","Strike Eagle","fighter","RECEIVER-F15E","Beagle"]},"description":"Dual-role strike fighter with 13,455 lbs fuel capacity and boom receptacle. Optimized for deep strike and air superiority. Wet-wing design maximizes internal fuel for long-duration missions.","sku":"RECEIVER-F15E","designation":"RECEIVER-F15E","category":"fighter","role":"receiver","fuel_capacity_lbs":13455,"fleet_count":218,"primary_base":"al-udeid-ab","tags":["fighter","receiver","boom-receptacle","strike","F-15","deep-strike","CENTCOM"]}
+        {"index":{"_index":"aircraft","_id":"6"}}
+        {"name":"B-52H Stratofortress","suggest":{"input":["B-52H Stratofortress","B-52","Stratofortress","BUFF","bomber","RECEIVER-B52H"]},"description":"Long-range strategic bomber with 312,197 lbs fuel capacity. Boom receptacle equipped. High-priority receiver due to mission criticality. Frequently refueled on deterrence patrols and long-range strike packages.","sku":"RECEIVER-B52H","designation":"RECEIVER-B52H","category":"bomber","role":"receiver","fuel_capacity_lbs":312197,"fleet_count":76,"primary_base":"minot-afb","tags":["bomber","receiver","boom-receptacle","strategic","B-52","STRATCOM","nuclear"]}
+        {"index":{"_index":"aircraft","_id":"7"}}
+        {"name":"F-22A Raptor","suggest":{"input":["F-22A Raptor","F-22","Raptor","stealth fighter","RECEIVER-F22A"]},"description":"Fifth-generation air superiority fighter with boom receptacle. Internal fuel capacity 18,000 lbs. Requires in-flight refueling for long-range deployment and extended combat air patrol. Low-observable design limits external tank options.","sku":"RECEIVER-F22A","designation":"RECEIVER-F22A","category":"fighter","role":"receiver","fuel_capacity_lbs":18000,"fleet_count":183,"primary_base":"kadena-ab","tags":["fighter","receiver","boom-receptacle","stealth","F-22","air-superiority","PACAF"]}
+        {"index":{"_index":"aircraft","_id":"8"}}
+        {"name":"A-10C Thunderbolt II","suggest":{"input":["A-10C Thunderbolt II","A-10","Thunderbolt","Warthog","attack","RECEIVER-A10C"]},"description":"Close air support aircraft with boom receptacle and 11,000 lbs fuel capacity. Refueling extends on-station time for ground support missions. Survivable, low-altitude design preferred for CAS in contested environments.","sku":"RECEIVER-A10C","designation":"RECEIVER-A10C","category":"attack","role":"receiver","fuel_capacity_lbs":11000,"fleet_count":281,"primary_base":"ramstein-ab","tags":["attack","CAS","receiver","boom-receptacle","A-10","Warthog","USAFE"]}
+        {"index":{"_index":"aircraft","_id":"9"}}
+        {"name":"C-17A Globemaster III","suggest":{"input":["C-17A Globemaster III","C-17","Globemaster","transport","RECEIVER-C17A"]},"description":"Strategic and tactical airlifter with boom receptacle and 35,546 lbs usable fuel. Refueling extends range for intercontinental airlift and airdrop missions. Supports both cargo and aeromedical evacuation roles.","sku":"RECEIVER-C17A","designation":"RECEIVER-C17A","category":"transport","role":"receiver","fuel_capacity_lbs":35546,"fleet_count":222,"primary_base":"joint-base-lewis-mcchord","tags":["transport","airlift","receiver","boom-receptacle","C-17","AMC","strategic-airlift"]}
+        {"index":{"_index":"aircraft","_id":"10"}}
+        {"name":"E-3G Sentry","suggest":{"input":["E-3G Sentry","E-3","Sentry","AWACS","ISR","RECEIVER-E3G"]},"description":"Airborne Warning and Control System (AWACS) aircraft with boom receptacle and 22,000 lbs fuel capacity. Extended refueling orbits provide persistent airspace management and battle management. High-value asset requiring tanker support for maximum on-station time.","sku":"RECEIVER-E3G","designation":"RECEIVER-E3G","category":"ISR","role":"receiver","fuel_capacity_lbs":22000,"fleet_count":31,"primary_base":"tinker-afb","tags":["ISR","AWACS","receiver","boom-receptacle","E-3","command-and-control","ACC"]}
+        ENDBULK
+        sed 's/^        //' /tmp/aircraft.ndjson > /tmp/aircraft-clean.ndjson
+        curl -sf --cacert $$CA -u "elastic:${ELASTIC_PASSWORD}" \
+          -X POST "$$ES/_bulk" -H "Content-Type: application/x-ndjson" \
+          --data-binary @/tmp/aircraft-clean.ndjson > /dev/null && echo "  10 aircraft indexed"
+
+        # ── missions ──────────────────────────────────────────────────────────────
+        # Denormalized: tanker and receivers embed aircraft name, designation,
+        # category, and fuel_capacity_lbs directly — no join needed.
+        echo "=== Creating missions index ==="
+        curl -sf --cacert $$CA -u "elastic:${ELASTIC_PASSWORD}" \
+          -X PUT "$$ES/missions" -H "Content-Type: application/json" \
+          -d '{"settings":{"number_of_shards":1,"number_of_replicas":0},"mappings":{"properties":{"name":{"type":"text","fields":{"search_as_you_type":{"type":"search_as_you_type"},"keyword":{"type":"keyword"}}},"suggest":{"type":"completion"},"status":{"type":"keyword"},"mission_type":{"type":"keyword"},"theater":{"type":"keyword"},"start_date":{"type":"date"},"tanker":{"type":"object","properties":{"designation":{"type":"keyword"},"name":{"type":"text"},"category":{"type":"keyword"},"fuel_capacity_lbs":{"type":"float"},"primary_base":{"type":"keyword"}}},"receivers":{"type":"object","properties":{"designation":{"type":"keyword"},"name":{"type":"text"},"category":{"type":"keyword"},"fuel_capacity_lbs":{"type":"float"}}},"fuel_transferred_lbs":{"type":"float"},"notes":{"type":"text"},"tags":{"type":"keyword"}}}}' \
+          && echo "  missions index created"
+
+        cat > /tmp/missions.ndjson << 'ENDBULK'
+        {"index":{"_index":"missions","_id":"1"}}
+        {"name":"Operation Pacific Bridge","suggest":{"input":["Operation Pacific Bridge","Pacific Bridge","PACAF tanker mission","KC-135 F-16 mission"]},"status":"active","mission_type":"combat-support","theater":"PACAF","start_date":"2024-03-01","tanker":{"designation":"TANKER-135","name":"KC-135 Stratotanker","category":"tanker","fuel_capacity_lbs":200000,"primary_base":"kadena-ab"},"receivers":[{"designation":"RECEIVER-F16C","name":"F-16C Fighting Falcon","category":"fighter","fuel_capacity_lbs":7000},{"designation":"RECEIVER-F16C","name":"F-16C Fighting Falcon","category":"fighter","fuel_capacity_lbs":7000}],"fuel_transferred_lbs":84000,"notes":"Routine air refueling supporting 35th FW F-16C alert package from Misawa AB. Two-ship receiver formation. Track established over Sea of Japan.","tags":["PACAF","KC-135","F-16C","active","combat-support"]}
+        {"index":{"_index":"missions","_id":"2"}}
+        {"name":"Operation Iron Sentinel","suggest":{"input":["Operation Iron Sentinel","Iron Sentinel","USAFE tanker mission","KC-46 F-22 deployment"]},"status":"completed","mission_type":"ferry","theater":"USAFE","start_date":"2024-01-14","tanker":{"designation":"TANKER-46A","name":"KC-46A Pegasus","category":"tanker","fuel_capacity_lbs":212000,"primary_base":"raf-mildenhall"},"receivers":[{"designation":"RECEIVER-F22A","name":"F-22A Raptor","category":"fighter","fuel_capacity_lbs":18000},{"designation":"RECEIVER-F22A","name":"F-22A Raptor","category":"fighter","fuel_capacity_lbs":18000}],"fuel_transferred_lbs":72000,"notes":"Transatlantic F-22A deployment ferry supporting 1st FW detachment to RAF Lakenheath. RVS boom used for all contacts. Four AR contacts total.","tags":["USAFE","KC-46A","F-22A","completed","ferry","transatlantic"]}
+        {"index":{"_index":"missions","_id":"3"}}
+        {"name":"Operation Desert Reach","suggest":{"input":["Operation Desert Reach","Desert Reach","CENTCOM tanker mission","KC-10 strike package"]},"status":"active","mission_type":"strike-support","theater":"CENTCOM","start_date":"2024-02-20","tanker":{"designation":"TANKER-10","name":"KC-10 Extender","category":"tanker","fuel_capacity_lbs":356000,"primary_base":"al-udeid-ab"},"receivers":[{"designation":"RECEIVER-F15E","name":"F-15E Strike Eagle","category":"fighter","fuel_capacity_lbs":13455},{"designation":"RECEIVER-F15E","name":"F-15E Strike Eagle","category":"fighter","fuel_capacity_lbs":13455},{"designation":"RECEIVER-B52H","name":"B-52H Stratofortress","category":"bomber","fuel_capacity_lbs":312197}],"fuel_transferred_lbs":218000,"notes":"Long-range strike package support. B-52H required three contacts for full offload. F-15E flight took one contact each. Mission extended by 45 min due to weather divert of primary track.","tags":["CENTCOM","KC-10","F-15E","B-52H","active","strike-support","long-range"]}
+        {"index":{"_index":"missions","_id":"4"}}
+        {"name":"Operation Northern Transit","suggest":{"input":["Operation Northern Transit","Northern Transit","strategic airlift refueling","C-17 tanker support"]},"status":"completed","mission_type":"strategic-airlift-support","theater":"USAFE","start_date":"2024-01-28","tanker":{"designation":"TANKER-135","name":"KC-135 Stratotanker","category":"tanker","fuel_capacity_lbs":200000,"primary_base":"raf-mildenhall"},"receivers":[{"designation":"RECEIVER-C17A","name":"C-17A Globemaster III","category":"transport","fuel_capacity_lbs":35546},{"designation":"RECEIVER-C17A","name":"C-17A Globemaster III","category":"transport","fuel_capacity_lbs":35546}],"fuel_transferred_lbs":142000,"notes":"Humanitarian airlift support mission. Two C-17As required top-off refueling over Atlantic for non-stop delivery to forward operating location. Night mission, NVG contacts.","tags":["USAFE","KC-135","C-17A","completed","strategic-airlift","humanitarian"]}
+        {"index":{"_index":"missions","_id":"5"}}
+        {"name":"Operation Storm Hawk","suggest":{"input":["Operation Storm Hawk","Storm Hawk","USAFE CAS refueling","KC-46 A-10 F-16"]},"status":"active","mission_type":"combat-support","theater":"USAFE","start_date":"2024-02-10","tanker":{"designation":"TANKER-46A","name":"KC-46A Pegasus","category":"tanker","fuel_capacity_lbs":212000,"primary_base":"raf-mildenhall"},"receivers":[{"designation":"RECEIVER-A10C","name":"A-10C Thunderbolt II","category":"attack","fuel_capacity_lbs":11000},{"designation":"RECEIVER-A10C","name":"A-10C Thunderbolt II","category":"attack","fuel_capacity_lbs":11000},{"designation":"RECEIVER-F16C","name":"F-16C Fighting Falcon","category":"fighter","fuel_capacity_lbs":7000}],"fuel_transferred_lbs":76000,"notes":"NATO exercise Steadfast Defender CAS package. A-10Cs operating at low altitude, required multiple contacts for extended on-station time over exercise area in Norway.","tags":["USAFE","KC-46A","A-10C","F-16C","active","NATO","exercise","CAS"]}
+        {"index":{"_index":"missions","_id":"6"}}
+        {"name":"Operation Coral Watch","suggest":{"input":["Operation Coral Watch","Coral Watch","AWACS refueling orbit","E-3 ISR persistence"]},"status":"active","mission_type":"ISR-support","theater":"PACAF","start_date":"2024-02-25","tanker":{"designation":"TANKER-10","name":"KC-10 Extender","category":"tanker","fuel_capacity_lbs":356000,"primary_base":"kadena-ab"},"receivers":[{"designation":"RECEIVER-E3G","name":"E-3G Sentry","category":"ISR","fuel_capacity_lbs":22000},{"designation":"RECEIVER-E3G","name":"E-3G Sentry","category":"ISR","fuel_capacity_lbs":22000}],"fuel_transferred_lbs":88000,"notes":"Sustained AWACS orbit over South China Sea supporting carrier strike group operations. Two E-3G Sentries maintained continuous coverage on alternating orbits with refueling every 4 hours.","tags":["PACAF","KC-10","E-3G","active","ISR","AWACS","persistence-orbit"]}
+        {"index":{"_index":"missions","_id":"7"}}
+        {"name":"Operation Iron Hammer","suggest":{"input":["Operation Iron Hammer","Iron Hammer","nuclear deterrence patrol","B-52 STRATCOM"]},"status":"active","mission_type":"strategic-deterrence","theater":"STRATCOM","start_date":"2024-03-03","tanker":{"designation":"TANKER-135","name":"KC-135 Stratotanker","category":"tanker","fuel_capacity_lbs":200000,"primary_base":"fairchild-afb"},"receivers":[{"designation":"RECEIVER-B52H","name":"B-52H Stratofortress","category":"bomber","fuel_capacity_lbs":312197}],"fuel_transferred_lbs":180000,"notes":"Continuous Bomber Presence mission. B-52H required four contacts over 14-hour sortie. High-priority tanker allocation. All contacts uneventful. Nuclear assurance flight under STRATCOM taskings.","tags":["STRATCOM","KC-135","B-52H","active","nuclear","deterrence","CBP"]}
+        {"index":{"_index":"missions","_id":"8"}}
+        {"name":"Operation Sunlit Path","suggest":{"input":["Operation Sunlit Path","Sunlit Path","F-22 Pacific deployment","long-range ferry"]},"status":"planned","mission_type":"ferry","theater":"PACAF","start_date":"2024-04-12","tanker":{"designation":"TANKER-46A","name":"KC-46A Pegasus","category":"tanker","fuel_capacity_lbs":212000,"primary_base":"mcconnell-afb"},"receivers":[{"designation":"RECEIVER-F22A","name":"F-22A Raptor","category":"fighter","fuel_capacity_lbs":18000},{"designation":"RECEIVER-F22A","name":"F-22A Raptor","category":"fighter","fuel_capacity_lbs":18000},{"designation":"RECEIVER-F22A","name":"F-22A Raptor","category":"fighter","fuel_capacity_lbs":18000},{"designation":"RECEIVER-F22A","name":"F-22A Raptor","category":"fighter","fuel_capacity_lbs":18000}],"fuel_transferred_lbs":144000,"notes":"Planned four-ship F-22A deployment from Langley AFB to Andersen AFB. Pacific crossing requires six AR tracks. Mission planning complete, crew rest requirements under review.","tags":["PACAF","KC-46A","F-22A","planned","ferry","Pacific-crossing","deployment"]}
+        {"index":{"_index":"missions","_id":"9"}}
+        {"name":"Operation Enduring Reach","suggest":{"input":["Operation Enduring Reach","Enduring Reach","CENTCOM deep strike","F-15E long range"]},"status":"active","mission_type":"strike-support","theater":"CENTCOM","start_date":"2024-02-18","tanker":{"designation":"TANKER-135","name":"KC-135 Stratotanker","category":"tanker","fuel_capacity_lbs":200000,"primary_base":"al-udeid-ab"},"receivers":[{"designation":"RECEIVER-F15E","name":"F-15E Strike Eagle","category":"fighter","fuel_capacity_lbs":13455},{"designation":"RECEIVER-F15E","name":"F-15E Strike Eagle","category":"fighter","fuel_capacity_lbs":13455},{"designation":"RECEIVER-F15E","name":"F-15E Strike Eagle","category":"fighter","fuel_capacity_lbs":13455}],"fuel_transferred_lbs":121000,"notes":"Three-ship F-15E strike package. Dual AR contacts — pre-target and post-target. Pre-target contact achieved full fuel state for all receivers. One aircraft declared emergency fuel on egress, priority AR contact completed.","tags":["CENTCOM","KC-135","F-15E","active","strike-support","deep-strike","emergency-AR"]}
+        {"index":{"_index":"missions","_id":"10"}}
+        {"name":"Operation Cold Response","suggest":{"input":["Operation Cold Response","Cold Response","Norway exercise","NATO CAS package"]},"status":"completed","mission_type":"exercise","theater":"USAFE","start_date":"2024-01-20","tanker":{"designation":"TANKER-135","name":"KC-135 Stratotanker","category":"tanker","fuel_capacity_lbs":200000,"primary_base":"raf-mildenhall"},"receivers":[{"designation":"RECEIVER-F16C","name":"F-16C Fighting Falcon","category":"fighter","fuel_capacity_lbs":7000},{"designation":"RECEIVER-A10C","name":"A-10C Thunderbolt II","category":"attack","fuel_capacity_lbs":11000},{"designation":"RECEIVER-F16C","name":"F-16C Fighting Falcon","category":"fighter","fuel_capacity_lbs":7000}],"fuel_transferred_lbs":98000,"notes":"NATO Cold Response exercise. Mixed fighter/attack package supporting Norwegian ground forces. Arctic weather conditions required extended pre-contact stabilization. All contacts completed successfully despite 40-knot winds aloft.","tags":["USAFE","KC-135","F-16C","A-10C","completed","NATO","exercise","arctic","Cold-Response"]}
+        ENDBULK
+        sed 's/^        //' /tmp/missions.ndjson > /tmp/missions-clean.ndjson
+        curl -sf --cacert $$CA -u "elastic:${ELASTIC_PASSWORD}" \
+          -X POST "$$ES/_bulk" -H "Content-Type: application/x-ndjson" \
+          --data-binary @/tmp/missions-clean.ndjson > /dev/null && echo "  10 missions indexed"
+
+        # ── airbases ──────────────────────────────────────────────────────────────
+        echo "=== Creating airbases index ==="
+        curl -sf --cacert $$CA -u "elastic:${ELASTIC_PASSWORD}" \
+          -X PUT "$$ES/airbases" -H "Content-Type: application/json" \
+          -d '{"settings":{"number_of_shards":1,"number_of_replicas":0},"mappings":{"properties":{"name":{"type":"text","fields":{"search_as_you_type":{"type":"search_as_you_type"},"keyword":{"type":"keyword"}}},"suggest":{"type":"completion"},"icao":{"type":"keyword"},"country":{"type":"keyword"},"command":{"type":"keyword"},"location":{"type":"geo_point"},"city":{"type":"keyword"},"active_aircraft_types":{"type":"keyword"},"tanker_capable":{"type":"boolean"},"runway_length_ft":{"type":"integer"},"notes":{"type":"text"},"tags":{"type":"keyword"}}}}' \
+          && echo "  airbases index created"
+
+        cat > /tmp/airbases.ndjson << 'ENDBULK'
+        {"index":{"_index":"airbases","_id":"1"}}
+        {"name":"RAF Mildenhall","suggest":{"input":["RAF Mildenhall","Mildenhall","EGUL","UK tanker base","USAFE tanker hub"]},"icao":"EGUL","country":"United Kingdom","command":"USAFE","location":{"lat":52.3616,"lon":0.4854},"city":"Mildenhall, Suffolk","active_aircraft_types":["KC-135","KC-10"],"tanker_capable":true,"runway_length_ft":9000,"notes":"Primary USAFE tanker base. Home of the 100th Air Refueling Wing. Forward location supporting European theater operations and transatlantic missions.","tags":["USAFE","tanker","KC-135","KC-10","UK","forward-base","100-ARW"]}
+        {"index":{"_index":"airbases","_id":"2"}}
+        {"name":"Al Udeid Air Base","suggest":{"input":["Al Udeid","Al Udeid AB","OTBH","Qatar air base","CENTCOM tanker hub"]},"icao":"OTBH","country":"Qatar","command":"CENTCOM","location":{"lat":25.1173,"lon":51.3150},"city":"Al Udeid, Qatar","active_aircraft_types":["KC-135","KC-10","F-15E","F-16C"],"tanker_capable":true,"runway_length_ft":12500,"notes":"Largest US air base in the Middle East. Home of the 379th Air Expeditionary Wing. Hub for all CENTCOM air operations. Hosts tanker, fighter, and ISR assets.","tags":["CENTCOM","tanker","KC-135","KC-10","Qatar","forward-base","379-AEW","Middle-East"]}
+        {"index":{"_index":"airbases","_id":"3"}}
+        {"name":"Kadena Air Base","suggest":{"input":["Kadena","Kadena AB","RODN","Japan air base","PACAF hub"]},"icao":"RODN","country":"Japan","command":"PACAF","location":{"lat":26.3556,"lon":127.7685},"city":"Kadena, Okinawa","active_aircraft_types":["KC-135","F-22A","F-15C"],"tanker_capable":true,"runway_length_ft":12100,"notes":"Keystone of the Pacific — largest US air base in Asia. Home of the 18th Wing. Critical tanker hub for PACAF operations supporting South China Sea and Korean Peninsula contingencies.","tags":["PACAF","tanker","KC-135","F-22A","Japan","Okinawa","18-Wing","keystone"]}
+        {"index":{"_index":"airbases","_id":"4"}}
+        {"name":"McConnell Air Force Base","suggest":{"input":["McConnell AFB","McConnell","KIAB","Kansas air base","KC-46 base"]},"icao":"KIAB","country":"United States","command":"AMC","location":{"lat":37.6217,"lon":-97.2682},"city":"Wichita, Kansas","active_aircraft_types":["KC-135","KC-46A"],"tanker_capable":true,"runway_length_ft":12000,"notes":"Home of the 22nd Air Refueling Wing, the USAF's first KC-46A unit. Primary KC-46A beddown and training location. Transitioning from KC-135 to KC-46A fleet.","tags":["AMC","tanker","KC-135","KC-46A","CONUS","22-ARW","beddown","training"]}
+        {"index":{"_index":"airbases","_id":"5"}}
+        {"name":"Fairchild Air Force Base","suggest":{"input":["Fairchild AFB","Fairchild","KSKA","Washington air base","KC-135 Fairchild"]},"icao":"KSKA","country":"United States","command":"AMC","location":{"lat":47.6151,"lon":-117.6556},"city":"Airway Heights, Washington","active_aircraft_types":["KC-135"],"tanker_capable":true,"runway_length_ft":13900,"notes":"Home of the 92nd Air Refueling Wing. One of the largest KC-135 operations in the USAF. Supports PACAF and NORTHCOM tanker taskings. Long runway supports heavy fuel loads.","tags":["AMC","tanker","KC-135","CONUS","92-ARW","Washington","PACAF-support"]}
+        {"index":{"_index":"airbases","_id":"6"}}
+        {"name":"Diego Garcia","suggest":{"input":["Diego Garcia","FJDG","British Indian Ocean Territory","BIOT","CENTCOM forward"]},"icao":"FJDG","country":"British Indian Ocean Territory","command":"CENTCOM","location":{"lat":-7.3126,"lon":72.4111},"city":"Diego Garcia, BIOT","active_aircraft_types":["B-52H","KC-135","KC-10"],"tanker_capable":true,"runway_length_ft":12000,"notes":"Critical mid-ocean forward operating location. Supports B-52H Continuous Bomber Presence and long-range strike missions across CENTCOM AOR. Tankers based here reduce ferry time significantly.","tags":["CENTCOM","tanker","B-52H","KC-135","KC-10","forward-base","Indian-Ocean","CBP","strategic"]}
+        {"index":{"_index":"airbases","_id":"7"}}
+        {"name":"Ramstein Air Base","suggest":{"input":["Ramstein","Ramstein AB","ETAR","Germany air base","USAFE headquarters"]},"icao":"ETAR","country":"Germany","command":"USAFE","location":{"lat":49.4369,"lon":7.6003},"city":"Ramstein-Miesenbach, Germany","active_aircraft_types":["F-16C","A-10C","C-17A"],"tanker_capable":false,"runway_length_ft":11000,"notes":"Headquarters of USAFE-AFAFRICA and NATO Air Command. Primary USAF hub in Europe for fighter, airlift, and aeromedical evacuation operations. Receives tanker support from RAF Mildenhall.","tags":["USAFE","fighter","F-16C","A-10C","C-17A","Germany","USAFE-HQ","NATO","AMC"]}
+        {"index":{"_index":"airbases","_id":"8"}}
+        {"name":"Joint Base Pearl Harbor-Hickam","suggest":{"input":["Joint Base Pearl Harbor-Hickam","Pearl Harbor Hickam","PHIK","Hawaii air base","PACAF Hickam"]},"icao":"PHIK","country":"United States","command":"PACAF","location":{"lat":21.3369,"lon":-157.9390},"city":"Honolulu, Hawaii","active_aircraft_types":["KC-135","C-17A","P-8A"],"tanker_capable":true,"runway_length_ft":12360,"notes":"PACAF headquarters and primary Pacific hub for tanker and airlift operations. Mid-Pacific refueling point for CONUS-to-PACAF deployments. Strategic chokepoint for all air operations in the Indo-Pacific.","tags":["PACAF","tanker","KC-135","C-17A","Hawaii","PACAF-HQ","Indo-Pacific","hub"]}
+        ENDBULK
+        sed 's/^        //' /tmp/airbases.ndjson > /tmp/airbases-clean.ndjson
+        curl -sf --cacert $$CA -u "elastic:${ELASTIC_PASSWORD}" \
+          -X POST "$$ES/_bulk" -H "Content-Type: application/x-ndjson" \
+          --data-binary @/tmp/airbases-clean.ndjson > /dev/null && echo "  8 airbases indexed"
+
+        # ── crews ─────────────────────────────────────────────────────────────────
+        # Denormalized: primary_airframe embeds aircraft name, designation,
+        # category, and fuel_capacity_lbs — searchable without a join.
+        echo "=== Creating crews index ==="
+        curl -sf --cacert $$CA -u "elastic:${ELASTIC_PASSWORD}" \
+          -X PUT "$$ES/crews" -H "Content-Type: application/json" \
+          -d '{"settings":{"number_of_shards":1,"number_of_replicas":0},"mappings":{"properties":{"full_name":{"type":"text","fields":{"search_as_you_type":{"type":"search_as_you_type"},"keyword":{"type":"keyword"}}},"suggest":{"type":"completion"},"last_name":{"type":"keyword"},"first_name":{"type":"keyword"},"rank":{"type":"keyword"},"role":{"type":"keyword"},"primary_airframe":{"type":"object","properties":{"designation":{"type":"keyword"},"name":{"type":"text"},"category":{"type":"keyword"},"role":{"type":"keyword"},"fuel_capacity_lbs":{"type":"float"}}},"total_flight_hours":{"type":"integer"},"boom_qualified":{"type":"boolean"},"unit":{"type":"keyword"},"base":{"type":"keyword"},"qualifications":{"type":"keyword"},"currency_expires":{"type":"date"}}}}' \
+          && echo "  crews index created"
+
+        cat > /tmp/crews.ndjson << 'ENDBULK'
+        {"index":{"_index":"crews","_id":"1"}}
+        {"full_name":"Maj. Sarah A. Holloway","suggest":{"input":["Holloway","Sarah Holloway","KC-135 pilot","tanker pilot"]},"last_name":"Holloway","first_name":"Sarah","rank":"Major","role":"pilot","primary_airframe":{"designation":"TANKER-135","name":"KC-135 Stratotanker","category":"tanker","role":"tanker","fuel_capacity_lbs":200000},"total_flight_hours":2847,"boom_qualified":false,"unit":"92nd Air Refueling Wing","base":"fairchild-afb","qualifications":["KC-135","aerial-refueling","instrument","night-vision"],"currency_expires":"2024-09-15"}
+        {"index":{"_index":"crews","_id":"2"}}
+        {"full_name":"TSgt. Marcus D. Webb","suggest":{"input":["Webb","Marcus Webb","KC-135 boom operator","boom operator"]},"last_name":"Webb","first_name":"Marcus","rank":"Technical Sergeant","role":"boom_operator","primary_airframe":{"designation":"TANKER-135","name":"KC-135 Stratotanker","category":"tanker","role":"tanker","fuel_capacity_lbs":200000},"total_flight_hours":1423,"boom_qualified":true,"unit":"92nd Air Refueling Wing","base":"fairchild-afb","qualifications":["KC-135","boom-operator","aerial-refueling","night-vision","combat-qualified"],"currency_expires":"2024-07-30"}
+        {"index":{"_index":"crews","_id":"3"}}
+        {"full_name":"Capt. James T. Nguyen","suggest":{"input":["Nguyen","James Nguyen","KC-46 pilot","RVS tanker pilot"]},"last_name":"Nguyen","first_name":"James","rank":"Captain","role":"pilot","primary_airframe":{"designation":"TANKER-46A","name":"KC-46A Pegasus","category":"tanker","role":"tanker","fuel_capacity_lbs":212000},"total_flight_hours":967,"boom_qualified":false,"unit":"22nd Air Refueling Wing","base":"mcconnell-afb","qualifications":["KC-46A","RVS","aerial-refueling","instrument","drogue"],"currency_expires":"2024-08-22"}
+        {"index":{"_index":"crews","_id":"4"}}
+        {"full_name":"SSgt. Priya K. Patel","suggest":{"input":["Patel","Priya Patel","KC-46 boom operator","RVS boom"]},"last_name":"Patel","first_name":"Priya","rank":"Staff Sergeant","role":"boom_operator","primary_airframe":{"designation":"TANKER-46A","name":"KC-46A Pegasus","category":"tanker","role":"tanker","fuel_capacity_lbs":212000},"total_flight_hours":618,"boom_qualified":true,"unit":"22nd Air Refueling Wing","base":"mcconnell-afb","qualifications":["KC-46A","boom-operator","RVS","aerial-refueling","drogue-operator"],"currency_expires":"2024-06-18"}
+        {"index":{"_index":"crews","_id":"5"}}
+        {"full_name":"Lt. Col. David M. Chen","suggest":{"input":["Chen","David Chen","KC-10 pilot","tanker aircraft commander"]},"last_name":"Chen","first_name":"David","rank":"Lieutenant Colonel","role":"aircraft_commander","primary_airframe":{"designation":"TANKER-10","name":"KC-10 Extender","category":"tanker","role":"tanker","fuel_capacity_lbs":356000},"total_flight_hours":4218,"boom_qualified":false,"unit":"100th Air Refueling Wing","base":"raf-mildenhall","qualifications":["KC-10","KC-135","aerial-refueling","instrument","night-vision","combat-qualified","instructor"],"currency_expires":"2024-11-01"}
+        {"index":{"_index":"crews","_id":"6"}}
+        {"full_name":"MSgt. Rosa L. Torres","suggest":{"input":["Torres","Rosa Torres","KC-10 boom operator","senior boom"]},"last_name":"Torres","first_name":"Rosa","rank":"Master Sergeant","role":"boom_operator","primary_airframe":{"designation":"TANKER-10","name":"KC-10 Extender","category":"tanker","role":"tanker","fuel_capacity_lbs":356000},"total_flight_hours":2134,"boom_qualified":true,"unit":"100th Air Refueling Wing","base":"raf-mildenhall","qualifications":["KC-10","KC-135","boom-operator","aerial-refueling","night-vision","combat-qualified","evaluator"],"currency_expires":"2024-10-14"}
+        {"index":{"_index":"crews","_id":"7"}}
+        {"full_name":"Maj. Tyler J. Brooks","suggest":{"input":["Brooks","Tyler Brooks","F-15E WSO","strike eagle aircrew"]},"last_name":"Brooks","first_name":"Tyler","rank":"Major","role":"WSO","primary_airframe":{"designation":"RECEIVER-F15E","name":"F-15E Strike Eagle","category":"fighter","role":"receiver","fuel_capacity_lbs":13455},"total_flight_hours":1847,"boom_qualified":false,"unit":"494th Fighter Squadron","base":"al-udeid-ab","qualifications":["F-15E","strike","air-to-ground","aerial-refueling-receiver","night-vision","JDAM","SEAD"],"currency_expires":"2024-08-05"}
+        {"index":{"_index":"crews","_id":"8"}}
+        {"full_name":"Capt. Aisha R. Johnson","suggest":{"input":["Johnson","Aisha Johnson","F-22 pilot","Raptor pilot"]},"last_name":"Johnson","first_name":"Aisha","rank":"Captain","role":"pilot","primary_airframe":{"designation":"RECEIVER-F22A","name":"F-22A Raptor","category":"fighter","role":"receiver","fuel_capacity_lbs":18000},"total_flight_hours":762,"boom_qualified":false,"unit":"199th Fighter Squadron","base":"kadena-ab","qualifications":["F-22A","air-superiority","aerial-refueling-receiver","night-vision","stealth-tactics"],"currency_expires":"2024-07-12"}
+        {"index":{"_index":"crews","_id":"9"}}
+        {"full_name":"Col. Richard N. Nash","suggest":{"input":["Nash","Richard Nash","B-52 pilot","BUFF pilot","STRATCOM bomber"]},"last_name":"Nash","first_name":"Richard","rank":"Colonel","role":"aircraft_commander","primary_airframe":{"designation":"RECEIVER-B52H","name":"B-52H Stratofortress","category":"bomber","role":"receiver","fuel_capacity_lbs":312197},"total_flight_hours":5127,"boom_qualified":false,"unit":"5th Bomb Wing","base":"minot-afb","qualifications":["B-52H","nuclear","conventional","aerial-refueling-receiver","STRATCOM-certified","instructor","evaluator"],"currency_expires":"2024-12-20"}
+        {"index":{"_index":"crews","_id":"10"}}
+        {"full_name":"1Lt. Kevin P. O'Brien","suggest":{"input":["O'Brien","Kevin O'Brien","F-16 pilot","Viper pilot"]},"last_name":"O'Brien","first_name":"Kevin","rank":"First Lieutenant","role":"pilot","primary_airframe":{"designation":"RECEIVER-F16C","name":"F-16C Fighting Falcon","category":"fighter","role":"receiver","fuel_capacity_lbs":7000},"total_flight_hours":347,"boom_qualified":false,"unit":"480th Fighter Squadron","base":"ramstein-ab","qualifications":["F-16C","CAS","aerial-refueling-receiver","night-vision"],"currency_expires":"2024-06-30"}
+        {"index":{"_index":"crews","_id":"11"}}
+        {"full_name":"Maj. Diana L. Pierce","suggest":{"input":["Pierce","Diana Pierce","E-3 WSOC","AWACS crew"]},"last_name":"Pierce","first_name":"Diana","rank":"Major","role":"WSOC","primary_airframe":{"designation":"RECEIVER-E3G","name":"E-3G Sentry","category":"ISR","role":"receiver","fuel_capacity_lbs":22000},"total_flight_hours":1634,"boom_qualified":false,"unit":"552nd Air Control Wing","base":"tinker-afb","qualifications":["E-3G","AWACS","battle-management","aerial-refueling-receiver","ISR","night-vision","combat-qualified"],"currency_expires":"2024-09-08"}
+        {"index":{"_index":"crews","_id":"12"}}
+        {"full_name":"Capt. Luis E. Herrera","suggest":{"input":["Herrera","Luis Herrera","A-10 pilot","Warthog pilot","CAS pilot"]},"last_name":"Herrera","first_name":"Luis","rank":"Captain","role":"pilot","primary_airframe":{"designation":"RECEIVER-A10C","name":"A-10C Thunderbolt II","category":"attack","role":"receiver","fuel_capacity_lbs":11000},"total_flight_hours":1247,"boom_qualified":false,"unit":"81st Fighter Squadron","base":"ramstein-ab","qualifications":["A-10C","CAS","aerial-refueling-receiver","night-vision","FAC-A","low-altitude"],"currency_expires":"2024-08-19"}
+        ENDBULK
+        sed 's/^        //' /tmp/crews.ndjson > /tmp/crews-clean.ndjson
+        curl -sf --cacert $$CA -u "elastic:${ELASTIC_PASSWORD}" \
+          -X POST "$$ES/_bulk" -H "Content-Type: application/x-ndjson" \
+          --data-binary @/tmp/crews-clean.ndjson > /dev/null && echo "  12 crew members indexed"
+
+        echo "=== Storing usaf-smart-search template ==="
+        curl -sf --cacert $$CA -u "elastic:${ELASTIC_PASSWORD}" \
+          -X PUT "$$ES/_scripts/usaf-smart-search" \
           -H "Content-Type: application/json" \
           -d '{
-            "settings": {
-              "number_of_shards": 1,
-              "number_of_replicas": 0,
-              "analysis": {
-                "analyzer": {
-                  "autocomplete": {
-                    "type": "custom",
-                    "tokenizer": "standard",
-                    "filter": ["lowercase", "edge_ngram_filter"]
+            "script": {
+              "lang": "mustache",
+              "source": {
+                "size": "{{#size}}{{size}}{{/size}}{{^size}}12{{/size}}",
+                "query": {
+                  "function_score": {
+                    "query": {
+                      "bool": {
+                        "should": [
+                          {
+                            "multi_match": {
+                              "query": "{{query}}",
+                              "fields": ["name^3","full_name^3","description","tags^2","category","role","unit","city","icao","theater","mission_type","notes","qualifications"],
+                              "fuzziness": "AUTO",
+                              "type": "best_fields",
+                              "boost": 1.0
+                            }
+                          },
+                          {
+                            "multi_match": {
+                              "query": "{{query}}",
+                              "fields": ["name.search_as_you_type","name.search_as_you_type._2gram","name.search_as_you_type._3gram"],
+                              "type": "bool_prefix",
+                              "boost": 0.8
+                            }
+                          },
+                          {
+                            "multi_match": {
+                              "query": "{{query}}",
+                              "fields": ["tanker.name","receivers.name","primary_airframe.name","tanker.designation","receivers.designation","primary_airframe.designation"],
+                              "fuzziness": "AUTO",
+                              "boost": 0.7
+                            }
+                          }
+                        ],
+                        "minimum_should_match": 1
+                      }
+                    },
+                    "functions": [
+                      {"filter": {"term": {"status": "active"}}, "weight": 1.5},
+                      {"filter": {"term": {"tanker_capable": true}}, "weight": 1.3},
+                      {"filter": {"term": {"category": "tanker"}}, "weight": 1.2}
+                    ],
+                    "boost_mode": "sum",
+                    "score_mode": "sum"
                   }
                 },
-                "filter": {
-                  "edge_ngram_filter": {
-                    "type": "edge_ngram",
-                    "min_gram": 2,
-                    "max_gram": 20
+                "highlight": {
+                  "pre_tags": ["<mark>"],
+                  "post_tags": ["</mark>"],
+                  "fields": {
+                    "name": {},
+                    "full_name": {},
+                    "description": {},
+                    "notes": {},
+                    "unit": {},
+                    "city": {}
                   }
                 }
               }
-            },
-            "mappings": {
-              "properties": {
-                "name": {
-                  "type": "text",
-                  "fields": {
-                    "search_as_you_type": { "type": "search_as_you_type" },
-                    "keyword": { "type": "keyword" }
-                  }
-                },
-                "suggest": {
-                  "type": "completion"
-                },
-                "description": { "type": "text" },
-                "sku": { "type": "keyword" },
-                "category": { "type": "keyword" },
-                "price": { "type": "float" },
-                "stock": { "type": "integer" },
-                "tags": { "type": "keyword" }
-              }
             }
-          }' && echo "  Index created"
+          }' && echo "  usaf-smart-search template stored" || echo "  WARNING: template store failed"
 
-        echo "=== Indexing product catalog ==="
+        echo "=== Refreshing all indices ==="
         curl -sf --cacert $$CA -u "elastic:${ELASTIC_PASSWORD}" \
-          -X POST "$$ES/_bulk" \
-          -H "Content-Type: application/x-ndjson" \
-          -d '{"index":{"_index":"products","_id":"1"}}
-        {"name":"Elasticsearch Node","suggest":{"input":["Elasticsearch Node","Elasticsearch","ES Node","search engine"]},"description":"High-performance distributed search and analytics engine node. Horizontally scalable with automatic sharding, real-time indexing, and sub-second query latency across petabyte-scale datasets.","sku":"ES-NODE-01","category":"infrastructure","price":499.00,"stock":999,"tags":["search","analytics","distributed","cluster"]}
-        {"index":{"_index":"products","_id":"2"}}
-        {"name":"Kibana Dashboard Pro","suggest":{"input":["Kibana Dashboard Pro","Kibana","Dashboard","visualization"]},"description":"Advanced data visualization and exploration platform. Includes Lens, Canvas, Maps, and machine learning integration for building interactive dashboards and discovering insights.","sku":"KB-DASH-PRO","category":"visualization","price":299.00,"stock":50,"tags":["visualization","dashboard","analytics","lens"]}
-        {"index":{"_index":"products","_id":"3"}}
-        {"name":"Logstash Enterprise","suggest":{"input":["Logstash Enterprise","Logstash","log pipeline","data processing"]},"description":"Server-side data processing pipeline that ingests data from multiple sources, transforms it, and sends it to Elasticsearch. Supports 200+ input/filter/output plugins.","sku":"LS-ENT-01","category":"ingest","price":199.00,"stock":12,"tags":["pipeline","ingest","etl","transform"]}
-        {"index":{"_index":"products","_id":"4"}}
-        {"name":"APM Server Token","suggest":{"input":["APM Server Token","APM","application performance monitoring","tracing"]},"description":"Application Performance Monitoring token enabling distributed tracing, error tracking, and service map visualization across polyglot microservice architectures.","sku":"APM-TOKEN-01","category":"observability","price":99.00,"stock":0,"tags":["apm","tracing","observability","monitoring"]}
-        {"index":{"_index":"products","_id":"5"}}
-        {"name":"Fleet Server License","suggest":{"input":["Fleet Server License","Fleet","agent management","fleet server"]},"description":"Centralized agent management license for Fleet Server. Deploy, configure, and update Elastic Agents at scale across your entire infrastructure from a single Kibana UI.","sku":"FLEET-LIC-01","category":"management","price":149.00,"stock":3,"tags":["fleet","agent","management","deploy"]}
-        {"index":{"_index":"products","_id":"6"}}
-        {"name":"Synthetic Monitor Pack","suggest":{"input":["Synthetic Monitor Pack","Synthetics","uptime monitoring","browser testing"]},"description":"Browser-based synthetic monitoring pack with Playwright integration. Schedule multi-step user journeys, assert page elements, and catch outages before your users do.","sku":"SYNTH-PACK-01","category":"observability","price":79.00,"stock":25,"tags":["synthetics","monitoring","uptime","playwright"]}
-        {"index":{"_index":"products","_id":"7"}}
-        {"name":"Machine Learning Toolkit","suggest":{"input":["Machine Learning Toolkit","ML","anomaly detection","machine learning"]},"description":"Unsupervised machine learning toolkit for anomaly detection, forecasting, and outlier analysis. Automatically identifies unusual patterns in time-series data without manual rule configuration.","sku":"ML-TOOL-01","category":"analytics","price":349.00,"stock":18,"tags":["ml","anomaly","forecasting","analytics"]}
-        {"index":{"_index":"products","_id":"8"}}
-        {"name":"Security SIEM Module","suggest":{"input":["Security SIEM Module","SIEM","security","threat detection"]},"description":"Elastic Security SIEM module with pre-built detection rules, timeline investigation, and case management. Correlate events across hosts, network, and cloud providers.","sku":"SIEM-MOD-01","category":"security","price":449.00,"stock":8,"tags":["security","siem","detection","threat"]}
-        {"index":{"_index":"products","_id":"9"}}
-        {"name":"Cross-Cluster Replication License","suggest":{"input":["Cross-Cluster Replication","CCR","replication","disaster recovery"]},"description":"Bi-directional cross-cluster replication for disaster recovery and geo-distributed deployments. Replicate indices across data centers with configurable lag tolerance.","sku":"CCR-LIC-01","category":"infrastructure","price":599.00,"stock":5,"tags":["ccr","replication","dr","geo"]}
-        {"index":{"_index":"products","_id":"10"}}
-        {"name":"Elastic Agent Universal License","suggest":{"input":["Elastic Agent","Universal Agent","endpoint","agent license"]},"description":"Universal data collection agent that replaces Beats for logs, metrics, traces, and endpoint security. Managed centrally through Fleet with automatic policy updates.","sku":"AGENT-UNI-01","category":"management","price":199.00,"stock":42,"tags":["agent","endpoint","universal","fleet"]}
-        ' && echo "  Products indexed"
-
-        echo "=== Refreshing index ==="
-        curl -sf --cacert $$CA -u "elastic:${ELASTIC_PASSWORD}" \
-          -X POST "$$ES/products/_refresh" > /dev/null
+          -X POST "$$ES/aircraft,missions,airbases,crews/_refresh" > /dev/null
 
         echo "=== Verifying ==="
-        COUNT=$$(curl -sf --cacert $$CA -u "elastic:${ELASTIC_PASSWORD}" \
-          "$$ES/products/_count" | grep -oE '"count":[0-9]+' | cut -d: -f2)
-        echo "  $$COUNT products indexed"
+        for IDX in aircraft missions airbases crews; do
+          COUNT=$$(curl -sf --cacert $$CA -u "elastic:${ELASTIC_PASSWORD}" \
+            "$$ES/$$IDX/_count" | grep -oE '"count":[0-9]+' | cut -d: -f2)
+          echo "  $$IDX: $$COUNT docs"
+        done
         echo "=== search-setup complete ==="
+
+  # ── Search Kibana ─────────────────────────────────────────────────────────────
+  kibana-search:
+    depends_on:
+      search-es01:
+        condition: service_healthy
+    image: docker.elastic.co/kibana/kibana:${STACK_VERSION}
+    labels:
+      co.elastic.logs/module: kibana
+    networks:
+      - net-east
+    volumes:
+      - certs:/usr/share/kibana/config/certs
+      - search-kibanadata:/usr/share/kibana/data
+      - ../config/kibana-search.yml:/usr/share/kibana/config/kibana.yml:ro
+    ports:
+      - ${SEARCH_KIBANA_PORT}:5601
+    environment:
+      - SERVERNAME=kibana-search
+      - ELASTICSEARCH_HOSTS=https://search-es01:9200
+      - ELASTICSEARCH_USERNAME=kibana_system
+      - ELASTICSEARCH_PASSWORD=${SEARCH_KIBANA_PASSWORD}
+      - ELASTICSEARCH_SSL_CERTIFICATEAUTHORITIES=config/certs/ca/ca.crt
+      - XPACK_SECURITY_ENCRYPTIONKEY=${ENCRYPTION_KEY}
+      - XPACK_ENCRYPTEDSAVEDOBJECTS_ENCRYPTIONKEY=${ENCRYPTION_KEY}
+      - XPACK_REPORTING_ENCRYPTIONKEY=${ENCRYPTION_KEY}
+      - XPACK_REPORTING_KIBANASERVER_HOSTNAME=localhost
+      - SERVER_SSL_ENABLED=true
+      - SERVER_SSL_CERTIFICATE=config/certs/apps/apps.crt
+      - SERVER_SSL_KEY=config/certs/apps/apps.key
+      - SERVER_SSL_CERTIFICATEAUTHORITIES=config/certs/ca/ca.crt
+    mem_limit: ${SEARCH_KB_MEM_LIMIT}
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "curl -I -s --cacert config/certs/ca/ca.crt https://localhost:5601 | grep -q 'HTTP/1.1 302 Found'",
+        ]
+      interval: 10s
+      timeout: 10s
+      retries: 120
+
+  # ── Microservice databases ────────────────────────────────────────────────────
+  # Four databases — one per DB engine — shared by dev and prod service instances.
+  # Each service seeds its own schema on startup if the table/collection is empty.
+
+  catalog-db:
+    image: postgres:16-alpine
+    networks:
+      - net-east
+    volumes:
+      - catalog-pgdata:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_DB=catalog
+      - POSTGRES_USER=catalog
+      - POSTGRES_PASSWORD=catalog123
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U catalog -d catalog"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    labels:
+      co.elastic.logs/enabled: "true"
+
+  orders-db:
+    image: mysql:8.0
+    networks:
+      - net-east
+    volumes:
+      - orders-mysqldata:/var/lib/mysql
+    environment:
+      - MYSQL_DATABASE=orders
+      - MYSQL_USER=orders
+      - MYSQL_PASSWORD=orders123
+      - MYSQL_ROOT_PASSWORD=root123
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-proot123"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    labels:
+      co.elastic.logs/enabled: "true"
+
+  reviews-db:
+    image: mongo:7
+    networks:
+      - net-east
+    volumes:
+      - reviews-mongodata:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    labels:
+      co.elastic.logs/enabled: "true"
+
+  # Azure SQL Edge — wire-compatible with SQL Server, lower memory footprint,
+  # and native ARM64 support for Apple Silicon Macs.
+  pricing-db:
+    image: mcr.microsoft.com/azure-sql-edge:latest
+    networks:
+      - net-east
+    volumes:
+      - pricing-mssqldata:/var/opt/mssql
+    environment:
+      - ACCEPT_EULA=Y
+      - MSSQL_SA_PASSWORD=Pricing123!
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -c \"import socket; s=socket.socket(); s.settimeout(2); s.connect(('localhost',1433)); s.close()\""]
+      interval: 10s
+      timeout: 10s
+      retries: 30
+    labels:
+      co.elastic.logs/enabled: "true"
 
   # ── Development microservices ─────────────────────────────────────────────────
   # Development environment with ANOMALY_ENABLED=true — cascading degradation
@@ -465,8 +729,15 @@ services:
       - ELASTIC_APM_SERVER_URL=http://east-apm-server:8200
       - ELASTIC_APM_ENVIRONMENT=development
       - ANOMALY_ENABLED=true
+      - DB_HOST=catalog-db
+      - DB_NAME=catalog
+      - DB_USER=catalog
+      - DB_PASSWORD=catalog123
     depends_on:
-      - east-apm-server
+      east-apm-server:
+        condition: service_started
+      catalog-db:
+        condition: service_healthy
 
   east-inventory:
     build:
@@ -506,8 +777,12 @@ services:
       - ELASTIC_APM_ENVIRONMENT=development
       - ANOMALY_ENABLED=true
       - CATALOG_URL=http://east-catalog:8000
+      - DB_CONNECTION=Server=pricing-db;Database=pricing;User Id=sa;Password=Pricing123!;TrustServerCertificate=True;
     depends_on:
-      - east-apm-server
+      east-apm-server:
+        condition: service_started
+      pricing-db:
+        condition: service_healthy
 
   east-reviews:
     build:
@@ -527,8 +802,13 @@ services:
       - ELASTIC_APM_ENVIRONMENT=development
       - ANOMALY_ENABLED=true
       - CATALOG_URL=http://east-catalog:8000
+      - MONGO_URL=mongodb://reviews-db:27017
+      - MONGO_DB=reviews
     depends_on:
-      - east-apm-server
+      east-apm-server:
+        condition: service_started
+      reviews-db:
+        condition: service_healthy
 
   east-orders:
     build:
@@ -549,8 +829,15 @@ services:
       - ANOMALY_ENABLED=true
       - INVENTORY_URL=http://east-inventory:8000
       - PRICING_URL=http://east-pricing:8000
+      - MYSQL_HOST=orders-db
+      - MYSQL_DATABASE=orders
+      - MYSQL_USER=orders
+      - MYSQL_PASSWORD=orders123
     depends_on:
-      - east-apm-server
+      east-apm-server:
+        condition: service_started
+      orders-db:
+        condition: service_healthy
 
   east-recommendations:
     build:
@@ -633,3 +920,63 @@ services:
         condition: service_started
       search-es01:
         condition: service_healthy
+
+  # ── Security data collection ──────────────────────────────────────────────────
+  # Packetbeat and Auditbeat feed the Elastic Security solution in east Kibana.
+  # Packetbeat captures network flows + application protocols (HTTP, PostgreSQL,
+  # MySQL, MongoDB, TLS) between the microservices. Auditbeat captures file
+  # integrity monitoring + host/process/socket/user/login events.
+  #
+  # Both ship to east-es01 into their own data streams (packetbeat-*, auditbeat-*)
+  # — they do not touch any existing index or integration.
+
+  # Network traffic monitor. Requires host networking to see traffic across the
+  # Docker bridges between microservices (net-east bridge, etc.). On Docker
+  # Desktop for Mac, enable "Host networking" in Settings → Features in
+  # development for full bridge visibility.
+  east-packetbeat:
+    depends_on:
+      east-es01:
+        condition: service_healthy
+    image: docker.elastic.co/beats/packetbeat:${STACK_VERSION}
+    user: root
+    network_mode: host
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    volumes:
+      - certs:/usr/share/packetbeat/certs
+      - ../config/packetbeat.yml:/usr/share/packetbeat/packetbeat.yml:ro
+      - east-packetbeatdata:/usr/share/packetbeat/data
+    environment:
+      - ELASTIC_PASSWORD=${ELASTIC_PASSWORD}
+      - EAST_ES_PORT=${EAST_ES_PORT}
+    command: ["-e", "--strict.perms=false"]
+    restart: on-failure
+
+  # Audit events: file integrity + system (processes, sockets, logins, users).
+  # Runs on the net-east bridge so it can reach east-es01 by service name.
+  east-auditbeat:
+    depends_on:
+      east-es01:
+        condition: service_healthy
+    image: docker.elastic.co/beats/auditbeat:${STACK_VERSION}
+    user: root
+    pid: host
+    cap_add:
+      - AUDIT_CONTROL
+      - AUDIT_READ
+      - SYS_PTRACE
+      - DAC_READ_SEARCH
+    networks:
+      - net-east
+    volumes:
+      - certs:/usr/share/auditbeat/certs
+      - ../config/auditbeat.yml:/usr/share/auditbeat/auditbeat.yml:ro
+      - east-auditbeatdata:/usr/share/auditbeat/data
+      - certs:/audit/certs:ro
+      - /:/hostfs:ro
+    environment:
+      - ELASTIC_PASSWORD=${ELASTIC_PASSWORD}
+    command: ["-e", "--strict.perms=false"]
+    restart: on-failure

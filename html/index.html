@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Elastic CCS Demo</title>
+  <title>USAF Refueling Ops — Elastic CCS Demo</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -84,6 +84,51 @@
     .euiBadge--warning { background: #fef6e0; color: #8a6300; }
     .euiBadge--primary { background: #e6f0ff; color: var(--euiColorPrimary); }
 
+    /* ── License tier chips — subtle, uppercase, bordered ── */
+    .tier-chip {
+      font-size: 9.5px; font-weight: 700; padding: 1px 6px; border-radius: 3px;
+      display: inline-block; white-space: nowrap; line-height: 1.55;
+      letter-spacing: .06em; text-transform: uppercase; vertical-align: middle;
+      margin-left: 6px;
+    }
+    .tier-chip--basic      { background: #eef2f7; color: #4a5373; border: 1px solid #d3dae6; }
+    .tier-chip--platinum   { background: #f3ecf9; color: #5a2d82; border: 1px solid #dcc9ea; }
+    .tier-chip--enterprise { background: #fdf3d8; color: #7a5a00; border: 1px solid #f0d89a; }
+
+    /* ── License panel ── */
+    .licensePanel {
+      background: linear-gradient(135deg, #f5f7fa 0%, #fbf8f0 100%);
+      border: 1px solid var(--euiColorLightShade);
+      border-radius: var(--euiBorderRadius);
+      padding: 16px 20px;
+    }
+    .licensePanel .tier-row {
+      display: grid; grid-template-columns: 110px 1fr; gap: 14px;
+      padding: 10px 0; border-bottom: 1px dashed var(--euiColorLightShade);
+      align-items: start;
+    }
+    .licensePanel .tier-row:last-of-type { border-bottom: none; }
+    .licensePanel .tier-row > div:first-child { padding-top: 1px; }
+    .licensePanel .tier-desc { font-size: 13px; color: var(--euiColorDarkShade); line-height: 1.55; }
+    .licensePanel .tier-desc strong { color: var(--euiColorDarkestShade); }
+    .licensePanel .tier-cta {
+      margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--euiColorLightShade);
+      font-size: 12px; color: var(--euiColorDarkShade); line-height: 1.6;
+    }
+    .licensePanel .tier-cta a { color: var(--euiColorPrimary); text-decoration: none; font-weight: 500; }
+    .licensePanel .tier-cta a:hover { text-decoration: underline; }
+
+    /* Trial strip in header */
+    .euiHeaderTrial {
+      margin-left: auto; display: flex; align-items: center; gap: 8px;
+      font-size: 11px; color: #cfd3da;
+    }
+    .euiHeaderTrial .dot {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: var(--euiColorSuccess);
+      box-shadow: 0 0 0 2px rgba(0, 191, 179, 0.2);
+    }
+
     /* ── Panels ── */
     .euiPanel {
       background: var(--euiColorEmptyShade); border: 1px solid var(--euiColorLightShade);
@@ -121,6 +166,41 @@
     .euiCard--danger { border-left: 3px solid var(--euiColorDanger); }
     .euiCard--warning { border-left: 3px solid var(--euiColorWarning); }
     .euiCard--primary { border-left: 3px solid var(--euiColorPrimary); }
+    .euiCard--success { border-left: 3px solid var(--euiColorSuccess); }
+
+    /* ── Investigation playbook layout ── */
+    .investigationGrid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--euiSizeM); }
+    @media (max-width: 720px) { .investigationGrid { grid-template-columns: 1fr; } }
+
+    .inv-scenario {
+      font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em;
+      color: var(--euiColorDarkShade); margin-bottom: 10px;
+    }
+    .inv-steps { list-style: none; padding: 0; counter-reset: step-counter; display: flex; flex-direction: column; gap: 10px; margin-bottom: 12px; }
+    .inv-steps li { font-size: 13px; color: var(--euiColorDarkShade); line-height: 1.6; padding-left: 28px; position: relative; }
+    .inv-steps li::before {
+      counter-increment: step-counter; content: counter(step-counter);
+      position: absolute; left: 0; top: 1px;
+      width: 18px; height: 18px; border-radius: 50%;
+      background: var(--euiColorLightShade); color: var(--euiColorDarkestShade);
+      font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center;
+    }
+    .inv-steps li strong { color: var(--euiColorDarkestShade); }
+    .inv-steps code {
+      background: var(--euiColorLightestShade); border: 1px solid var(--euiColorLightShade);
+      border-radius: 3px; padding: 1px 5px; font-size: 11px; color: var(--euiColorPrimary); font-family: monospace;
+    }
+    .inv-finding {
+      background: var(--euiColorLightestShade); border-left: 3px solid var(--euiColorMediumShade);
+      border-radius: 0 4px 4px 0; padding: 8px 12px; font-size: 12px;
+      color: var(--euiColorDarkShade); line-height: 1.6; margin: 10px 0;
+    }
+    .inv-finding strong { color: var(--euiColorDarkestShade); }
+    .inv-rootcause {
+      background: #f0f4ff; border: 1px solid #c5d3f0; border-radius: 4px;
+      padding: 8px 12px; font-size: 12px; color: #2a3a6e; line-height: 1.6; margin-top: 10px;
+    }
+    .inv-rootcause strong { color: #1a2a5e; }
 
     /* ── Footer ── */
     .euiFooter { margin-top: 48px; padding: var(--euiSizeM); text-align: center; font-size: 12px; color: var(--euiColorMediumShade); border-top: 1px solid var(--euiColorLightShade); }
@@ -131,14 +211,17 @@
 <div class="euiHeader">
   <div class="euiHeaderLogo">E</div>
   <div class="euiHeaderTitle">elastic <span>demo</span></div>
+  <div class="euiHeaderTrial" title="All subscription-tier features unlocked during trial">
+    <span class="dot"></span><span>trial license active &middot; all tiers unlocked</span>
+  </div>
 </div>
 
 <div class="euiPageBody">
 
-  <h1 class="euiTitle--l">Elastic CCS Demo Environment</h1>
+  <h1 class="euiTitle--l">USAF Aerial Refueling Operations — Elastic CCS Demo</h1>
   <p class="euiText--subdued">
-    Two-cluster Elastic Stack: <strong>East</strong> (production — all observability data) and
-    <strong>West</strong> (operations/NOC — CCS reader with alerting).
+    Two-cluster Elastic Stack: <strong>East</strong> (production — all observability data for the refueling ops platform) and
+    <strong>West</strong> (operations/NOC — CCS reader with cross-cluster alerting).
     APM, ML, Synthetics, Filebeat, Metricbeat, and Heartbeat all ship to east.
     West watches east via Cross-Cluster Search.
   </p>
@@ -150,19 +233,24 @@
       <a class="euiCard" href="https://localhost:5601" target="_blank">
         <div class="euiCard__title">Kibana — West <span class="euiBadge euiBadge--west">cluster-west</span></div>
         <div class="euiCard__url">https://localhost:5601</div>
-        <div class="euiCard__description">Operations / NOC cluster. Reads east production data via CCS. Hosts cross-cluster alerting rules. Stack monitoring for west ES nodes only.</div>
+        <div class="euiCard__description">Operations / NOC cluster. Reads east production data via CCS. Hosts cross-cluster alerting rules watching refueling mission health. Stack monitoring for west ES nodes only.</div>
       </a>
       <a class="euiCard" href="https://localhost:5602" target="_blank">
         <div class="euiCard__title">Kibana — East <span class="euiBadge euiBadge--east">cluster-east</span></div>
         <div class="euiCard__url">https://localhost:5602</div>
-        <div class="euiCard__description">Production cluster. ALL observability data lives here — APM traces, logs, metrics, synthetics, heartbeat, ML jobs. Primary Kibana for investigation.</div>
+        <div class="euiCard__description">Production cluster. ALL observability data lives here — APM traces, logs, metrics, synthetics, heartbeat, ML jobs, SLOs. Primary Kibana for mission investigation.</div>
+      </a>
+      <a class="euiCard" href="https://localhost:5603" target="_blank">
+        <div class="euiCard__title">Kibana — Search <span class="euiBadge euiBadge--shared">search-cluster</span></div>
+        <div class="euiCard__url">https://localhost:5603</div>
+        <div class="euiCard__description">Dedicated Kibana for the application search backend cluster. Browse the <code>aircraft</code>, <code>missions</code>, <code>airbases</code>, and <code>crews</code> indices, inspect mappings, and explore the stored <code>usaf-smart-search</code> template.</div>
       </a>
     </div>
   </section>
 
   <!-- ── Webapps ── -->
   <section>
-    <h2 class="euiTitle--xs">Demo Webapps (APM-instrumented)</h2>
+    <h2 class="euiTitle--xs">Refueling Ops Platform (APM-instrumented)</h2>
     <div class="euiFlexGrid">
       <a class="euiCard" href="https://localhost:8000" target="_blank">
         <div class="euiCard__title">Python Webapp — West <span class="euiBadge euiBadge--west">cluster-west</span></div>
@@ -170,14 +258,14 @@
         <div class="euiCard__description">Generates APM transactions. Heartbeat hits <code>/</code>, <code>/error</code>, and <code>/custom_message/:msg</code>.</div>
       </a>
       <a class="euiCard" href="https://localhost:8001" target="_blank">
-        <div class="euiCard__title">Development Gateway <span class="euiBadge euiBadge--dev">development</span></div>
+        <div class="euiCard__title">Development Ops Gateway <span class="euiBadge euiBadge--dev">development</span></div>
         <div class="euiCard__url">https://localhost:8001</div>
-        <div class="euiCard__description">7-service microservice UI with <strong>anomalies enabled</strong>. Cascading degradation patterns fire every 10 minutes. Used for ML training and investigation narratives.</div>
+        <div class="euiCard__description">7-service USAF refueling ops UI with <strong>anomalies enabled</strong>. Cascading degradation patterns fire every 4 minutes simulating real mission system failures. Used for ML training and investigation narratives.</div>
       </a>
       <a class="euiCard" href="https://localhost:8002" target="_blank">
-        <div class="euiCard__title">Production Gateway <span class="euiBadge euiBadge--prod">production</span></div>
+        <div class="euiCard__title">Production Ops Gateway <span class="euiBadge euiBadge--prod">production</span></div>
         <div class="euiCard__url">https://localhost:8002</div>
-        <div class="euiCard__description">Identical 7-service architecture but <strong>stable and clean</strong>. No programmed latency or errors. Represents the baseline of normal behavior in APM.</div>
+        <div class="euiCard__description">Identical 7-service architecture but <strong>stable and clean</strong>. No programmed latency or errors. Represents baseline normal behavior across all refueling operation services.</div>
       </a>
     </div>
   </section>
@@ -199,7 +287,7 @@
       <a class="euiCard" href="https://localhost:9202" target="_blank">
         <div class="euiCard__title">Elasticsearch — Search <span class="euiBadge euiBadge--east">search-cluster</span></div>
         <div class="euiCard__url">https://localhost:9202</div>
-        <div class="euiCard__description">Single-node application search backend. Lexical search, search-as-you-type, and typeahead completion. Try it in the <a href="https://localhost:8001" style="color:var(--euiColorPrimary);">gateway UI</a>.</div>
+        <div class="euiCard__description">Single-node application search backend. Hosts 4 indices (<code>aircraft</code>, <code>missions</code>, <code>airbases</code>, <code>crews</code>) and the stored <code>usaf-smart-search</code> Mustache template. Powers all 4 search modes in the ops gateway UI (port 8001).</div>
       </a>
     </div>
   </section>
@@ -207,59 +295,82 @@
   <!-- ── Investigation Narratives ── -->
   <section>
     <h2 class="euiTitle--xs">Guided Investigations — Pivot Through Your Data</h2>
-    <p class="euiText--subdued" style="margin-bottom:16px;">Every 10 minutes, a cascading degradation ripples through the development microservices. Use these narratives to practice the core Elastic Observability workflow: <strong>detect &rarr; triage &rarr; correlate &rarr; root-cause</strong>.</p>
-    <div class="euiFlexGrid">
+    <p class="euiText--subdued" style="margin-bottom:16px;">Every 4 minutes, a cascading degradation ripples through the development refueling ops services. Use these playbooks to practice the core Elastic Observability workflow: <strong>detect &rarr; triage &rarr; correlate &rarr; root-cause</strong>. All investigations run against <strong>East Kibana</strong> (port 5602) unless otherwise noted.</p>
+    <div class="investigationGrid">
+
       <div class="euiCard euiCard--danger" style="cursor:default;">
-        <div class="euiCard__title">Investigation 1: The Cascading Slowdown</div>
-        <div class="euiCard__description">
-          <strong>Symptom:</strong> APM Service Map shows red/yellow latency indicators across multiple services.<br><br>
-          <strong>Steps:</strong><br>
-          1. Open <strong>Observability &rarr; APM &rarr; Service Map</strong>. Watch for services turning yellow/red.<br>
-          2. Click the first degraded service (usually <code>east-catalog</code>). Open <strong>Transactions</strong>.<br>
-          3. Click a slow transaction &rarr; <strong>Trace waterfall</strong>. See which downstream call took longest.<br>
-          4. <strong>Actions &rarr; View in Discover</strong>. Pivot to logs filtered by <code>trace.id</code>.<br>
-          5. Look for <code>scenario=degraded</code> and <em>"database connection pool exhausted"</em>.<br>
-          6. Open <strong>ML &rarr; Anomaly Explorer</strong>. The latency job flags the same window.<br><br>
-          <strong>Root cause:</strong> Catalog degrades at second 420 of each 10-minute cycle. Other services cascade: inventory (440s), pricing (450s), reviews (460s), orders (470s), recommendations (480s).
-        </div>
+        <div class="euiCard__title">Investigation 1 &mdash; The Cascading Slowdown <span class="tier-chip tier-chip--platinum" title="Machine Learning anomaly detection requires Platinum">Platinum</span></div>
+        <div class="inv-scenario">Scenario: Mission coordinator notices the ops portal is slow. Multiple services are degrading but no single alert has fired yet.</div>
+        <ol class="inv-steps">
+          <li>Open <strong>Observability &rarr; APM &rarr; Service Map</strong>. Wait for the degradation window — services turn <em>yellow then red</em> in cascade order starting around second 168 of the 4-minute cycle.</li>
+          <li>Click <strong>east-catalog</strong> (Aircraft Registry) — it degrades first. Select <strong>Transactions</strong>, filter to <code>GET /aircraft</code>. Watch P95 latency spike from ~50ms to 800–1500ms.</li>
+          <li>Click a slow transaction (sort by duration descending). Open the <strong>Trace waterfall</strong>. Confirm that 60–80% of total duration is inside the <code>east-catalog</code> span, not downstream calls.</li>
+          <li>In the waterfall header click <strong>View in Discover</strong>. Discover opens pre-filtered to <code>trace.id: &lt;id&gt;</code>. You'll see log entries with <code>scenario: degraded</code> and the message <em>"aircraft registry database connection pool exhausted"</em>.</li>
+          <li>Back in APM, click through <strong>east-inventory</strong>, <strong>east-pricing</strong>, and <strong>east-orders</strong>. Each shows a degradation window starting progressively later (176s, 180s, 188s). This is the cascade.</li>
+          <li>Open <strong>Machine Learning &rarr; Anomaly Explorer</strong> &rarr; select <code>demo-latency-outliers</code>. All six services appear in the swimlane. The anomaly scores align precisely with the windows in the reference table below.</li>
+        </ol>
+        <div class="inv-finding"><strong>Key finding:</strong> The Service Map shows the blast radius. The trace waterfall localises the root service. Logs confirm the failure mode. ML confirms it's statistically anomalous — not noise.</div>
+        <div class="inv-rootcause"><strong>Root cause:</strong> <code>east-catalog</code> exhausts its DB connection pool at second 168. Every dependent service (all six) begins returning 503s as its upstream catalog calls time out. The stagger is architectural — each service has a different retry/timeout budget.</div>
       </div>
+
       <div class="euiCard euiCard--warning" style="cursor:default;">
-        <div class="euiCard__title">Investigation 2: Error Spike Correlation</div>
-        <div class="euiCard__description">
-          <strong>Symptom:</strong> ML error rate job flags an anomaly. Multiple services show 503 errors simultaneously.<br><br>
-          <strong>Steps:</strong><br>
-          1. Open <strong>ML &rarr; Anomaly Explorer</strong>. Select <code>demo-apm-error-rate</code>. Note flagged services.<br>
-          2. Click anomaly swimlane &rarr; <strong>View in APM</strong>. The Errors tab shows specific exceptions.<br>
-          3. Compare error messages: catalog says <em>"db pool exhaustion"</em>, orders says <em>"deadlock"</em> — different symptoms, same window.<br>
-          4. <strong>Logs</strong>: filter <code>log.level: error AND scenario: degraded</code>. All errors cluster in 90 seconds.<br><br>
-          <strong>Root cause:</strong> Each service returns 503s at different rates (10-15%). Errors are correlated in time but differ per language — the pattern of a real cascading failure.
-        </div>
+        <div class="euiCard__title">Investigation 2 &mdash; Error Spike Correlation <span class="tier-chip tier-chip--platinum" title="ML + SLOs">Platinum</span> <span class="tier-chip tier-chip--enterprise" title="SLOs on Observability Enterprise">Enterprise</span></div>
+        <div class="inv-scenario">Scenario: An ML anomaly fires for the error rate job. Multiple services show 503s simultaneously — is this one failure or six independent incidents?</div>
+        <ol class="inv-steps">
+          <li>Open <strong>Machine Learning &rarr; Anomaly Explorer</strong> &rarr; select <code>demo-apm-error-rate</code>. The swimlane shows multiple services flagged in the <em>same 5-minute bucket</em>. Anomaly scores will be 50–95 depending on cycle position.</li>
+          <li>Click an anomaly cell and choose <strong>View in APM</strong>. The Errors tab opens for that service. Note the exception message — each language reports the failure differently: Java says <em>"db pool exhaustion"</em>, Ruby says <em>"database deadlock"</em>, Go says <em>"depot sync timeout"</em>.</li>
+          <li>Open <strong>Observability &rarr; Logs &rarr; Explorer</strong> (or Discover against <code>filebeat-*</code>). Run the KQL: <code>log.level: (WARN OR ERROR) AND scenario: degraded</code>. All matching log lines cluster within the same 36-second degradation window.</li>
+          <li>Add <code>service.name</code> as a breakdown field. You'll see that all six services emit degraded errors in the same time bucket — <em>different messages, same timestamp cluster</em>. That pattern rules out independent failures.</li>
+          <li>Now open <strong>Observability &rarr; Logs &rarr; Log Anomalies</strong>. The <code>demo-log-rate</code> ML job surfaces the same window as an unusual log volume spike, corroborating the APM error rate anomaly from a different signal.</li>
+          <li>Check <strong>Observability &rarr; SLOs</strong>. Filter to the affected services — their availability SLOs (99.5% target) will be burning down during the degradation window. The error budget remaining chart shows the impact rate.</li>
+        </ol>
+        <div class="inv-finding"><strong>Key finding:</strong> Different error messages across services are a signature of <em>cascading failure</em>, not independent bugs. If it were six separate bugs, the timestamps would not align this precisely.</div>
+        <div class="inv-rootcause"><strong>Root cause:</strong> All 503 errors are downstream consequences of the catalog connection pool exhaustion. The polyglot error messages describe each service's <em>local</em> failure response, not the underlying cause — a common trap in microservice debugging.</div>
       </div>
+
       <div class="euiCard euiCard--primary" style="cursor:default;">
-        <div class="euiCard__title">Investigation 3: The Latency Outlier</div>
-        <div class="euiCard__description">
-          <strong>Symptom:</strong> <code>demo-latency-outliers</code> ML job detects one service with mean latency 10x above baseline.<br><br>
-          <strong>Steps:</strong><br>
-          1. <strong>ML &rarr; Anomaly Explorer</strong> &rarr; <code>demo-latency-outliers</code>. Partition view shows the outlier.<br>
-          2. <code>east-recommendations</code> (Rust) has the highest score — 600-2000ms in degraded mode.<br>
-          3. <strong>APM &rarr; Transactions</strong>. Latency distribution shows bimodal: 10-80ms (normal) vs 600-2000ms (degraded).<br>
-          4. Open a slow trace. Waterfall shows recommendation computation dominating duration.<br>
-          5. Pivot to <strong>Logs</strong>. See <em>"Recommendation model timeout"</em>.<br><br>
-          <strong>Root cause:</strong> Recommendations degrades last (second 480) but has the most extreme latency, making it the biggest outlier.
-        </div>
+        <div class="euiCard__title">Investigation 3 &mdash; The Latency Outlier <span class="tier-chip tier-chip--platinum" title="ML single-metric viewer">Platinum</span> <span class="tier-chip tier-chip--enterprise" title="Latency SLO burn rate">Enterprise</span></div>
+        <div class="inv-scenario">Scenario: SLO burn rate alert fires for Tanker Pairings. Latency is far outside normal bounds, but error rate looks almost normal. What's happening?</div>
+        <ol class="inv-steps">
+          <li>Open <strong>Machine Learning &rarr; Anomaly Explorer</strong> &rarr; <code>demo-latency-outliers</code>. Switch to <strong>Single Metric Viewer</strong> and select partition <code>east-recommendations</code>. The model bound shows a normal baseline of 10–80ms. Actual values during degradation are 600–2000ms.</li>
+          <li>Open <strong>Observability &rarr; APM &rarr; Services &rarr; east-recommendations &rarr; Transactions</strong>. The <strong>Latency distribution</strong> histogram shows a <em>bimodal shape</em> — two distinct peaks, not a long tail. This is a classic on/off degradation pattern, not gradual drift.</li>
+          <li>Filter transactions by <strong>duration &gt; 500ms</strong>. Open one. The trace waterfall shows the entire request time is consumed inside a single <code>recommendations</code> span — no downstream calls. The slowness is internal to the service.</li>
+          <li>In the waterfall click <strong>View in Discover</strong>. Filter to that <code>trace.id</code> and look for the log message containing <em>"Recommendation model timeout"</em>. Note the <code>transaction.id</code> in the log matches the trace.</li>
+          <li>Now compare with a <em>normal</em> trace (duration &lt; 100ms) from the same service. The same endpoint, same code path — but without the timeout. The bimodal distribution is the on/off degradation toggle, not a load-dependent curve.</li>
+          <li>Open <strong>Observability &rarr; SLOs &rarr; east-recommendations latency SLO</strong> (target: P95 &lt; 500ms). During the degradation window, P95 blows past 500ms — the SLO is actively breaching and burning error budget.</li>
+        </ol>
+        <div class="inv-finding"><strong>Key finding:</strong> The bimodal latency distribution is a critical diagnostic signal. It means the problem is a hard mode-switch (degraded vs. normal), not load-induced — narrowing root cause significantly.</div>
+        <div class="inv-rootcause"><strong>Root cause:</strong> The Rust recommendation engine simulates a model inference timeout during its degradation window (second 192–204). It's the last service to degrade and has the most extreme latency impact — but the lowest error rate, making it the hardest to catch without ML.</div>
       </div>
+
+      <div class="euiCard euiCard--success" style="cursor:default;">
+        <div class="euiCard__title">Investigation 4 &mdash; Cross-Cluster NOC View <span class="tier-chip tier-chip--basic" title="Cross-cluster search is included in Basic">Basic</span> <span class="tier-chip tier-chip--platinum" title="Cross-cluster alerting rules">Platinum</span></div>
+        <div class="inv-scenario">Scenario: You're an ops engineer on the NOC team. You have read-only visibility into the production east cluster via CCS from your west cluster — no direct production access required.</div>
+        <ol class="inv-steps">
+          <li>Open <strong>West Kibana</strong> (port 5601) and log in as <code>ccs-analyst / CcsAnalyst1!</code>. This account has cross-cluster read access but cannot modify east cluster data.</li>
+          <li>Open <strong>Observability &rarr; APM</strong>. The data view is <code>cluster-east:traces-apm*</code>. You're seeing east production APM data through CCS — rendered in your local Kibana without any data replication.</li>
+          <li>Open <strong>Alerting &rarr; Rules</strong>. Three CCS alerting rules watch east from here: <em>High Error Rate</em>, <em>Degraded Mode Detected</em>, and <em>Health Check Failure</em>. All query <code>cluster-east:*</code> index patterns.</li>
+          <li>When a degradation window hits, watch <strong>Alerting &rarr; Alerts</strong>. The <em>East Microservices — High Error Rate</em> rule fires against <code>cluster-east:traces-apm*</code>. The rule owner is west; the data is east.</li>
+          <li>Open <strong>Discover</strong> and switch to the <strong>cluster-east filebeat</strong> data view. Search <code>scenario: degraded</code>. You're running a full-text log search across the east cluster's filebeat indices from west — pure CCS, no data movement.</li>
+          <li>Switch to the <code>ccs-full-analyst</code> user in Kibana Dev Tools and run: <code>GET cluster-east:filebeat-*/_count</code>. The CCS coordinator (west-es01) proxies the query to east-es01 and returns the result.</li>
+        </ol>
+        <div class="inv-finding"><strong>Key finding:</strong> West Kibana surfaces east production data with zero replication. The NOC team sees what matters without write access to production — a clean separation of operational and engineering concerns.</div>
+        <div class="inv-rootcause"><strong>Architecture benefit:</strong> CCS lets you centralise alerting and NOC dashboards in one place (west) while keeping production data isolated. A compromised NOC workstation cannot modify production indices. Query latency is typically &lt;50ms over the net-ccs bridge.</div>
+      </div>
+
     </div>
   </section>
 
   <!-- ── Anomaly Pattern Reference ── -->
   <section>
-    <h2 class="euiTitle--xs">Anomaly Pattern Reference</h2>
+    <h2 class="euiTitle--xs">Anomaly Pattern Reference <span class="tier-chip tier-chip--platinum" title="Machine Learning jobs require Platinum">Platinum</span></h2>
     <div class="euiPanel">
-      <p>All development services follow a <strong>10-minute cycle</strong> (600 seconds). During the degradation window, each service introduces latency spikes and HTTP 503 errors. The <strong>cascade offset</strong> creates a realistic ripple effect.</p>
+      <p>All development services follow a <strong>4-minute cycle</strong> (240 seconds). During the degradation window, each service introduces latency spikes and HTTP 503 errors. The <strong>cascade offset</strong> creates a realistic ripple effect across the refueling ops platform.</p>
       <table class="euiTable">
         <thead>
           <tr>
             <th>Service</th>
+            <th>Domain Role</th>
             <th>Language</th>
             <th>Degraded Window</th>
             <th>Slow %</th>
@@ -268,12 +379,12 @@
           </tr>
         </thead>
         <tbody>
-          <tr><td>east-catalog</td><td>Java</td><td><code>420s-510s</code></td><td>60%</td><td>15%</td><td><span class="euiBadge euiBadge--danger">DB pool exhaustion</span></td></tr>
-          <tr><td>east-inventory</td><td>Go</td><td><code>440s-510s</code></td><td>50%</td><td>10%</td><td><span class="euiBadge euiBadge--danger">Warehouse sync timeout</span></td></tr>
-          <tr><td>east-pricing</td><td>.NET</td><td><code>450s-510s</code></td><td>45%</td><td>10%</td><td><span class="euiBadge euiBadge--danger">Cache miss / rate limit</span></td></tr>
-          <tr><td>east-reviews</td><td>PHP</td><td><code>460s-510s</code></td><td>40%</td><td>12%</td><td><span class="euiBadge euiBadge--danger">Connection pool exhausted</span></td></tr>
-          <tr><td>east-orders</td><td>Ruby</td><td><code>470s-510s</code></td><td>50%</td><td>12%</td><td><span class="euiBadge euiBadge--danger">Database deadlock</span></td></tr>
-          <tr><td>east-recommendations</td><td>Rust</td><td><code>480s-510s</code></td><td>55%</td><td>10%</td><td><span class="euiBadge euiBadge--danger">Model inference timeout</span></td></tr>
+          <tr><td>east-catalog</td><td>Aircraft Registry</td><td>Java</td><td><code>168s-204s</code></td><td>60%</td><td>15%</td><td><span class="euiBadge euiBadge--danger">DB pool exhaustion</span></td></tr>
+          <tr><td>east-inventory</td><td>Fuel Depot Status</td><td>Go</td><td><code>176s-204s</code></td><td>50%</td><td>10%</td><td><span class="euiBadge euiBadge--danger">Depot sync timeout</span></td></tr>
+          <tr><td>east-pricing</td><td>Mission Cost Rates</td><td>.NET</td><td><code>180s-204s</code></td><td>45%</td><td>10%</td><td><span class="euiBadge euiBadge--danger">Cache miss / rate limit</span></td></tr>
+          <tr><td>east-reviews</td><td>After Action Reports</td><td>PHP</td><td><code>184s-204s</code></td><td>40%</td><td>12%</td><td><span class="euiBadge euiBadge--danger">Connection pool exhausted</span></td></tr>
+          <tr><td>east-orders</td><td>Active Missions</td><td>Ruby</td><td><code>188s-204s</code></td><td>50%</td><td>12%</td><td><span class="euiBadge euiBadge--danger">Database deadlock</span></td></tr>
+          <tr><td>east-recommendations</td><td>Tanker Pairings</td><td>Rust</td><td><code>192s-204s</code></td><td>55%</td><td>10%</td><td><span class="euiBadge euiBadge--danger">Model inference timeout</span></td></tr>
         </tbody>
       </table>
       <p style="margin-top:12px;"><strong>ML jobs:</strong> APM duration anomaly (built-in), <code>demo-apm-error-rate</code>, <code>demo-log-rate</code>, <code>demo-latency-outliers</code>. All use 5-minute bucket spans partitioned by <code>service.name</code>.</p>
@@ -282,11 +393,11 @@
 
   <!-- ── Synthetic Monitor Journeys ── -->
   <section>
-    <h2 class="euiTitle--xs">Synthetic Monitor Journeys</h2>
+    <h2 class="euiTitle--xs">Synthetic Monitor Journeys <span class="tier-chip tier-chip--enterprise" title="Synthetic Monitoring requires Observability Enterprise">Enterprise</span></h2>
     <div class="euiFlexGrid">
       <div class="euiCard" style="cursor:default;">
-        <div class="euiCard__title">Customer Shopping Journey <span class="euiBadge euiBadge--east">10 min</span></div>
-        <div class="euiCard__description">Simulates a shopper clicking through the development gateway. Fetches catalog (Java), inventory (Go), pricing (.NET), reviews (PHP), recommendations (Rust), and orders (Ruby). Each step generates a distributed APM trace spanning all 7 languages.</div>
+        <div class="euiCard__title">Refueling Mission Ops Journey <span class="euiBadge euiBadge--east">10 min</span></div>
+        <div class="euiCard__description">Simulates a mission coordinator checking the development gateway. Fetches aircraft registry (Java), fuel depot status (Go), mission cost rates (.NET), after action reports (PHP), tanker pairings (Rust), and active missions (Ruby). Each step generates a distributed APM trace spanning all 7 languages.</div>
       </div>
       <div class="euiCard" style="cursor:default;">
         <div class="euiCard__title">APM Error Tracking &amp; Custom Events <span class="euiBadge euiBadge--west">15 min</span></div>
@@ -299,21 +410,72 @@
     </div>
   </section>
 
+  <!-- ── Security data collection ── -->
+  <section>
+    <h2 class="euiTitle--xs">Security Data Collection</h2>
+    <p class="euiText--subdued" style="margin-bottom:16px;">Two lightweight Beats ship security-relevant data into <strong>east-es01</strong>, feeding the <strong>Elastic Security</strong> solution in <a href="https://localhost:5602/app/security" target="_blank" rel="noopener">East Kibana</a>. Additive to the observability pipeline — existing APM, ML, SLOs, and synthetics are untouched.</p>
+    <div class="euiFlexGrid">
+      <div class="euiCard" style="cursor:default;border-left:3px solid var(--euiColorPrimary);">
+        <div class="euiCard__title">Packetbeat <span class="euiBadge euiBadge--east">host net</span></div>
+        <div class="euiCard__description">
+          Runs on <code>network_mode: host</code> with <code>NET_ADMIN</code> / <code>NET_RAW</code> to sniff traffic across the <code>net-east</code> Docker bridges between microservices. Captures <strong>flow records</strong> plus decoded application protocols: <span class="mono">HTTP · PostgreSQL · MySQL · MongoDB · TLS · DNS · ICMP</span>. Ships to data streams <code>packetbeat-*</code> — feeds the <em>Network</em> section of the Security solution.
+        </div>
+      </div>
+      <div class="euiCard" style="cursor:default;border-left:3px solid var(--euiColorSuccess);">
+        <div class="euiCard__title">Auditbeat <span class="euiBadge euiBadge--east">pid: host</span></div>
+        <div class="euiCard__description">
+          File Integrity Monitoring over the shared <code>certs</code> volume + host binary paths. System datasets: <span class="mono">host · login · package · process · user</span>. Any tampering with certificates or unexpected process/user activity surfaces in <code>auditbeat-*</code> — feeds the <em>Hosts</em> section of the Security solution and correlates with Packetbeat network events on Timeline.
+        </div>
+      </div>
+    </div>
+  </section>
+
   <!-- ── About ── -->
   <section>
     <h2 class="euiTitle--xs">What this demo covers</h2>
     <div class="euiPanel euiPanel--subdued">
       <ul>
-        <li><strong>Two-cluster architecture</strong> — East is the production cluster where all observability data lives. West is the operations/NOC cluster that reads east data via CCS and hosts alerting rules.</li>
-        <li><strong>Cross-Cluster Search (CCS)</strong> — West Kibana queries <code>cluster-east:*</code> indices. Three cross-cluster data views: APM traces, Filebeat logs, Heartbeat uptime.</li>
-        <li><strong>Cross-Cluster Alerting</strong> — Three rules in west Kibana watch east production data: high error rate, degraded mode detection, health check failures.</li>
-        <li><strong>APM &amp; Distributed Tracing</strong> — All services ship traces to east. Distributed traces span 7 languages with up to 4-hop depth. ML anomaly detection runs on APM data.</li>
+        <li><strong>Two-cluster architecture</strong> — East is the production cluster where all observability data for the refueling ops platform lives. West is the operations/NOC cluster that reads east data via CCS and hosts alerting rules.</li>
+        <li><strong>Cross-Cluster Search (CCS)</strong> <span class="tier-chip tier-chip--basic">Basic</span> — West Kibana queries <code>cluster-east:*</code> indices. Three cross-cluster data views: APM traces, Filebeat logs, Heartbeat uptime.</li>
+        <li><strong>Cross-Cluster Alerting</strong> <span class="tier-chip tier-chip--platinum">Platinum</span> — Three rules in west Kibana watch east production data: high error rate, degraded mode detection, health check failures.</li>
+        <li><strong>APM &amp; Distributed Tracing</strong> <span class="tier-chip tier-chip--basic">Basic</span> <span class="tier-chip tier-chip--platinum">Platinum</span> — All services ship traces to east. Distributed traces span 7 languages with up to 4-hop depth. ML anomaly detection runs on APM data (Platinum).</li>
+        <li><strong>SLOs</strong> <span class="tier-chip tier-chip--enterprise">Enterprise</span> — 14 SLOs in east Kibana: availability (99.5%) and latency SLOs for each of the 7 refueling ops services, backed by APM transaction data on a 30-day rolling window.</li>
         <li><strong>Dual Environments</strong> — Development (port 8001, anomalies enabled) and Production (port 8002, stable). Same service names, different <code>ELASTIC_APM_ENVIRONMENT</code>. APM data streams split by namespace.</li>
-        <li><strong>Application Search</strong> — Dedicated <code>search-es01</code> cluster powers lexical search, search-as-you-type, and completion suggester for the product catalog.</li>
-        <li><strong>Synthetic Monitoring</strong> — Fleet Server + elastic-agent-complete on east. Three Playwright browser journeys test real user flows.</li>
-        <li><strong>Heartbeat</strong> — Monitors both clusters and all microservice health endpoints. Data ships to east.</li>
-        <li><strong>Filebeat + Metricbeat</strong> — East filebeat autodiscovers container logs. East metricbeat collects ES, Kibana, and Docker metrics. West metricbeat: stack monitoring only.</li>
+        <li><strong>Application Search</strong> <span class="tier-chip tier-chip--basic">Basic</span> — Dedicated <code>search-es01</code> cluster with 4 indices (<code>aircraft</code>, <code>missions</code>, <code>airbases</code>, <code>crews</code>). Powers 4 search modes in the ops gateway UI: lexical, search-as-you-type, typeahead completion, and a stored <code>usaf-smart-search</code> Mustache template with cross-index function scoring and <code>&lt;mark&gt;</code> highlighting.</li>
+        <li><strong>Synthetic Monitoring</strong> <span class="tier-chip tier-chip--enterprise">Enterprise</span> — Fleet Server + elastic-agent-complete on east. Three Playwright browser journeys test real refueling ops user flows.</li>
+        <li><strong>Heartbeat</strong> <span class="tier-chip tier-chip--basic">Basic</span> — Monitors both clusters and all microservice health endpoints. Data ships to east.</li>
+        <li><strong>Filebeat + Metricbeat</strong> <span class="tier-chip tier-chip--basic">Basic</span> — East filebeat autodiscovers container logs. East metricbeat collects ES, Kibana, and Docker metrics. West metricbeat: stack monitoring only.</li>
+        <li><strong>Security — Network Traffic</strong> <span class="tier-chip tier-chip--basic">Basic</span> <span class="tier-chip tier-chip--platinum">Platinum</span> — Packetbeat on host networking captures inter-service flows plus decoded HTTP, PostgreSQL, MySQL, MongoDB, TLS, and DNS. Feeds the <em>Network</em> section of the Elastic Security solution. Detection rules &amp; ML jobs over this data are Platinum.</li>
+        <li><strong>Security — Audit &amp; File Integrity</strong> <span class="tier-chip tier-chip--basic">Basic</span> <span class="tier-chip tier-chip--platinum">Platinum</span> — Auditbeat monitors the TLS cert volume + system paths for FIM, plus host, login, package, process, and user datasets. Feeds the <em>Hosts</em> section of the Security solution. Endpoint protection (Elastic Defend) is Platinum.</li>
       </ul>
+    </div>
+  </section>
+
+  <!-- ── Subscription tiers ── -->
+  <section>
+    <h2 class="euiTitle--xs">Subscription tiers unlocked in this demo</h2>
+    <div class="licensePanel">
+      <div class="tier-row">
+        <div><span class="tier-chip tier-chip--basic" style="margin-left:0;">Basic</span></div>
+        <div class="tier-desc">
+          <strong>Free &amp; Open.</strong> Cross-Cluster Search, full APM ingest &amp; distributed tracing, Heartbeat, Filebeat + Metricbeat, Packetbeat + Auditbeat security data collection, application search (lexical, search-as-you-type, completion suggester, stored templates), basic Kibana alerting, and the Security solution UI (Network / Hosts views, Timeline, manual investigations).
+        </div>
+      </div>
+      <div class="tier-row">
+        <div><span class="tier-chip tier-chip--platinum" style="margin-left:0;">Platinum</span></div>
+        <div class="tier-desc">
+          <strong>Paid.</strong> Machine Learning anomaly detection (all 3 ML jobs in this demo), cross-cluster alerting rules, cross-cluster replication, field-level security, Elasticsearch audit logging, detection rules &amp; ML-based detections in the Security solution. Every guided investigation in this demo pivots through ML — without Platinum, those workflows don't exist.
+        </div>
+      </div>
+      <div class="tier-row">
+        <div><span class="tier-chip tier-chip--enterprise" style="margin-left:0;">Enterprise</span></div>
+        <div class="tier-desc">
+          <strong>Top tier.</strong> SLOs (14 in this demo — availability + latency per service), Synthetic Monitoring (Playwright browser journeys), searchable snapshots (frozen tier), Elastic AI Assistant for Observability, Universal Profiling, Elastic Defend (endpoint protection &amp; EDR), advanced security analytics &amp; Cloud Security Posture Management. The "detect &rarr; triage &rarr; SLO burn" loop in Investigation 2 and 3 is only observable at this tier.
+        </div>
+      </div>
+      <div class="tier-cta">
+        All features above are unlocked under the 30-day trial license currently running on both clusters. After the trial expires, unlicensed features revert to Basic capabilities unless a subscription is applied. Pricing and tier details: <a href="https://www.elastic.co/subscriptions" target="_blank" rel="noopener">elastic.co/subscriptions</a>.
+      </div>
     </div>
   </section>
 
@@ -321,18 +483,31 @@
   <section>
     <h2 class="euiTitle--xs">Default credentials</h2>
     <div class="euiPanel">
-      <p>Both Kibana instances and Elasticsearch use the same superuser account:</p>
+      <p><strong>West Kibana</strong> (port 5601) &amp; <strong>Search Kibana</strong> (port 5603) — superuser:</p>
       <dl class="euiDescriptionList">
         <dt>Username</dt><dd>elastic</dd>
         <dt>Password</dt><dd>changeme</dd>
       </dl>
+      <p style="margin-top:14px;"><strong>East Kibana</strong> (port 5602) — admin account:</p>
+      <dl class="euiDescriptionList">
+        <dt>Username</dt><dd>east-admin</dd>
+        <dt>Password</dt><dd>EastAdmin1!</dd>
+      </dl>
+      <p style="margin-top:14px;"><strong>Demo users</strong> on West Kibana — for CCS role-based access demonstrations:</p>
+      <table class="euiTable" style="margin-top:6px;">
+        <thead><tr><th>Username</th><th>Password</th><th>Access</th></tr></thead>
+        <tbody>
+          <tr><td><code>ccs-analyst</code></td><td><code>CcsAnalyst1!</code></td><td>Cross-cluster read — west + east data via CCS</td></tr>
+          <tr><td><code>west-analyst</code></td><td><code>WestAnalyst1!</code></td><td>West-local read only — no cross-cluster access</td></tr>
+        </tbody>
+      </table>
       <p style="margin-top:12px;">Passwords are set in <code>.env</code> — change <code>ELASTIC_PASSWORD</code> before deploying to any shared or non-local environment.</p>
     </div>
   </section>
 
 </div>
 
-<div class="euiFooter">Elastic CCS Demo &mdash; local Docker environment</div>
+<div class="euiFooter">USAF Aerial Refueling Ops &mdash; Elastic CCS Demo &mdash; local Docker environment</div>
 
 </body>
 </html>

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>east-gateway</title>
+  <title>USAF Refueling Operations — east-gateway</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
@@ -235,50 +235,50 @@
 
 <div class="top-bar">
   <div class="logo">E</div>
-  <span class="top-name">east-gateway</span>
+  <span class="top-name">USAF Aerial Refueling Operations</span>
   <span class="pill pill-east">cluster-east</span>
   <span class="pill pill-plain">{{ environment }}</span>
 </div>
 
 <div class="page">
 
-  <h1 class="euiTitle">East Cluster — Multi-Language Microservices Demo</h1>
-  <p class="page-desc">The gateway fans requests out to downstream services written in Java, Go, .NET, and PHP. Each hop propagates <span class="mono">traceparent</span> so the full distributed trace is visible in Elastic APM.</p>
+  <h1 class="euiTitle">USAF Aerial Refueling Operations Center</h1>
+  <p class="page-desc">Operational hub for air-to-air and ground refueling mission management. The gateway fans requests out to downstream services tracking aircraft, fuel depots, mission costs, AARs, active missions, and tanker pairings. Each hop propagates <span class="mono">traceparent</span> so the full distributed trace is visible in Elastic APM.</p>
 
   <!-- Architecture overview -->
   <div class="arch-strip">
     <div class="arch-node">
-      <dt>Gateway (this service)</dt>
+      <dt>Ops Gateway (this service)</dt>
       <dd><span class="dot-live">●</span> east-gateway</dd>
       <div><span class="lang-badge lang-python">Python</span></div>
     </div>
     <div class="arch-node">
-      <dt>Catalog Service</dt>
+      <dt>Aircraft Registry</dt>
       <dd><span class="dot-svc">●</span> east-catalog</dd>
       <div><span class="lang-badge lang-java">Java</span></div>
     </div>
     <div class="arch-node">
-      <dt>Inventory Service</dt>
+      <dt>Fuel Depot Status</dt>
       <dd><span class="dot-svc">●</span> east-inventory</dd>
       <div><span class="lang-badge lang-go">Go</span></div>
     </div>
     <div class="arch-node">
-      <dt>Pricing Service</dt>
+      <dt>Mission Cost Rates</dt>
       <dd><span class="dot-svc">●</span> east-pricing</dd>
       <div><span class="lang-badge lang-dotnet">.NET</span></div>
     </div>
     <div class="arch-node">
-      <dt>Reviews Service</dt>
+      <dt>After Action Reports</dt>
       <dd><span class="dot-svc">●</span> east-reviews</dd>
       <div><span class="lang-badge lang-php">PHP</span></div>
     </div>
     <div class="arch-node">
-      <dt>Orders Service</dt>
+      <dt>Active Missions</dt>
       <dd><span class="dot-svc">●</span> east-orders</dd>
       <div><span class="lang-badge lang-ruby">Ruby</span></div>
     </div>
     <div class="arch-node">
-      <dt>Recommendations</dt>
+      <dt>Tanker Pairings</dt>
       <dd><span class="dot-svc">●</span> east-recommendations</dd>
       <div><span class="lang-badge lang-rust">Rust</span></div>
     </div>
@@ -304,27 +304,27 @@
       <dd>{{ environment }}</dd>
     </div>
     <div class="info-cell">
-      <dt>Catalog</dt>
+      <dt>Aircraft Registry</dt>
       <dd>{{ catalog_url }}</dd>
     </div>
     <div class="info-cell">
-      <dt>Inventory</dt>
+      <dt>Fuel Depot</dt>
       <dd>{{ inventory_url }}</dd>
     </div>
     <div class="info-cell">
-      <dt>Pricing</dt>
+      <dt>Mission Costs</dt>
       <dd>{{ pricing_url }}</dd>
     </div>
     <div class="info-cell">
-      <dt>Reviews</dt>
+      <dt>AARs</dt>
       <dd>{{ reviews_url }}</dd>
     </div>
     <div class="info-cell">
-      <dt>Orders</dt>
+      <dt>Missions</dt>
       <dd>{{ orders_url }}</dd>
     </div>
     <div class="info-cell">
-      <dt>Recommendations</dt>
+      <dt>Tanker Pairings</dt>
       <dd>{{ recommendations_url }}</dd>
     </div>
     <div class="info-cell">
@@ -333,15 +333,16 @@
     </div>
   </dl>
 
-  <p class="section-label">Product Search (powered by search-es01)</p>
+  <p class="section-label">Search (powered by search-es01 · aircraft · missions · airbases · crews)</p>
   <div class="search-section">
     <div class="search-tabs">
       <button class="search-tab active" onclick="setSearchMode('lexical')">Lexical Search</button>
       <button class="search-tab" onclick="setSearchMode('asyoutype')">Search-as-you-type</button>
       <button class="search-tab" onclick="setSearchMode('typeahead')">Typeahead Suggester</button>
+      <button class="search-tab" onclick="setSearchMode('template')">Smart Search</button>
     </div>
     <div class="search-input-row">
-      <input id="search-input" class="search-input" type="text" placeholder="Search products…" autocomplete="off">
+      <input id="search-input" class="search-input" type="text" placeholder="Search aircraft, designations, roles…" autocomplete="off">
       <button class="search-btn" onclick="doSearch()">Search</button>
     </div>
     <div class="search-meta" id="search-meta"></div>
@@ -353,74 +354,74 @@
 
     <div class="euiCard">
       <div class="card-head">
-        <div class="card-icon icon-catalog">📦</div>
-        <span class="card-title">Browse Catalog</span>
+        <div class="card-icon icon-catalog">✈</div>
+        <span class="card-title">Aircraft Registry</span>
       </div>
       <p class="card-desc">
         <span class="lang-badge lang-java">Java · Spring Boot</span><br><br>
-        Calls <span class="mono">/products</span> on the catalog service. Simulates DB queries with occasional slow-query APM spans.
+        Calls <span class="mono">/products</span> on the registry service. Returns tanker and receiver aircraft with designations, roles, and fuel capacities.
       </p>
-      <div><button class="btn btn-catalog" onclick="doFetch(this,'catalog','/catalog','east-catalog')">Fetch Products</button></div>
+      <div><button class="btn btn-catalog" onclick="doFetch(this,'catalog','/catalog','east-catalog')">Fetch Aircraft</button></div>
     </div>
 
     <div class="euiCard">
       <div class="card-head">
-        <div class="card-icon icon-inventory">🏭</div>
-        <span class="card-title">Check Inventory</span>
+        <div class="card-icon icon-inventory">⛽</div>
+        <span class="card-title">Fuel Depot Status</span>
       </div>
       <p class="card-desc">
         <span class="lang-badge lang-go">Go · Gin</span><br><br>
-        Calls <span class="mono">/stock</span> on the inventory service. Simulates warehouse latency spikes at 12% frequency.
+        Calls <span class="mono">/stock</span> on the fuel depot service. Returns fuel levels (lbs) across Ramstein, Kadena, and Al Udeid.
       </p>
-      <div><button class="btn btn-inventory" onclick="doFetch(this,'inventory','/inventory','east-inventory')">Fetch Stock</button></div>
+      <div><button class="btn btn-inventory" onclick="doFetch(this,'inventory','/inventory','east-inventory')">Fetch Fuel Levels</button></div>
     </div>
 
     <div class="euiCard">
       <div class="card-head">
-        <div class="card-icon icon-pricing">💰</div>
-        <span class="card-title">Get Pricing</span>
+        <div class="card-icon icon-pricing">💲</div>
+        <span class="card-title">Mission Cost Rates</span>
       </div>
       <p class="card-desc">
         <span class="lang-badge lang-dotnet">.NET · ASP.NET Core</span><br><br>
-        Calls <span class="mono">/prices</span> on the pricing service. Returns list prices, discount percentages, and currency.
+        Calls <span class="mono">/prices</span> on the cost service. Returns base cost per flight hour, priority surcharges, and total rates.
       </p>
-      <div><button class="btn btn-pricing" onclick="doFetch(this,'pricing','/pricing','east-pricing')">Fetch Prices</button></div>
+      <div><button class="btn btn-pricing" onclick="doFetch(this,'pricing','/pricing','east-pricing')">Fetch Cost Rates</button></div>
     </div>
 
     <div class="euiCard">
       <div class="card-head">
-        <div class="card-icon icon-reviews">⭐</div>
-        <span class="card-title">Read Reviews</span>
+        <div class="card-icon icon-reviews">📋</div>
+        <span class="card-title">After Action Reports</span>
       </div>
       <p class="card-desc">
         <span class="lang-badge lang-php">PHP · Slim 4</span><br><br>
-        Calls <span class="mono">/reviews</span> on the reviews service. Returns product ratings and user feedback.
+        Calls <span class="mono">/reviews</span> on the AAR service. Returns pilot mission reports with success ratings and debrief notes.
       </p>
-      <div><button class="btn btn-reviews" onclick="doFetch(this,'reviews','/reviews','east-reviews')">Fetch Reviews</button></div>
+      <div><button class="btn btn-reviews" onclick="doFetch(this,'reviews','/reviews','east-reviews')">Fetch AARs</button></div>
     </div>
 
     <div class="euiCard">
       <div class="card-head">
-        <div class="card-icon icon-orders">🛒</div>
-        <span class="card-title">Browse Orders</span>
+        <div class="card-icon icon-orders">🎯</div>
+        <span class="card-title">Active Missions</span>
       </div>
       <p class="card-desc">
         <span class="lang-badge lang-ruby">Ruby · Sinatra</span><br><br>
-        Calls <span class="mono">/orders</span> on the orders service. Returns order history with status and totals.
+        Calls <span class="mono">/orders</span> on the missions service. Returns active, scheduled, and completed refueling missions.
       </p>
-      <div><button class="btn btn-orders" onclick="doFetch(this,'orders','/orders','east-orders')">Fetch Orders</button></div>
+      <div><button class="btn btn-orders" onclick="doFetch(this,'orders','/orders','east-orders')">Fetch Missions</button></div>
     </div>
 
     <div class="euiCard">
       <div class="card-head">
-        <div class="card-icon icon-recommendations">✨</div>
-        <span class="card-title">Get Recommendations</span>
+        <div class="card-icon icon-recommendations">🔗</div>
+        <span class="card-title">Tanker Pairings</span>
       </div>
       <p class="card-desc">
         <span class="lang-badge lang-rust">Rust · Axum</span><br><br>
-        Calls <span class="mono">/recommendations</span>. Returns ranked product suggestions with relevance scores.
+        Calls <span class="mono">/recommendations</span>. Returns ranked tanker-receiver pairings with compatibility scores.
       </p>
-      <div><button class="btn btn-recommendations" onclick="doFetch(this,'recommendations','/recommendations','east-recommendations')">Fetch Recommendations</button></div>
+      <div><button class="btn btn-recommendations" onclick="doFetch(this,'recommendations','/recommendations','east-recommendations')">Fetch Pairings</button></div>
     </div>
 
     <div class="euiCard">
@@ -445,7 +446,7 @@
         Sends a custom string to APM via <span class="mono">/custom_message/{"{msg}"}</span>.
       </p>
       <div class="field-row">
-        <input id="msg-input" class="eui-input" type="text" placeholder="Enter a message…" value="hello from east">
+        <input id="msg-input" class="eui-input" type="text" placeholder="Enter a message…" value="GHOST 11 fuel transfer complete">
         <button class="btn btn-primary" onclick="sendMsg(this)">Send</button>
       </div>
     </div>
@@ -475,15 +476,12 @@
   function fmt(data, type) {
     if (data.error)    return '\u26a0 ' + data.error;
     if (data.message)  return data.message;
-    if (data.products)        return data.count + ' products — first: "' + data.products[0].name + '"';
-    if (data.items)           return data.count + ' items — first: "' + data.items[0].name + '" @ $' + data.items[0].list_price;
-    if (data.reviews)         return data.count + ' reviews — latest: "' + data.reviews[0].title + '" (' + data.reviews[0].rating + '\u2605)';
-    if (data.orders)          return data.count + ' orders — latest: ' + data.orders[0].id + ' (' + data.orders[0].status + ')';
-    if (data.recommendations) return data.count + ' recommendations — top: "' + data.recommendations[0].name + '" score: ' + data.recommendations[0].score;
-    if (Array.isArray(data)) {
-      var first = data[0];
-      if (first && first.sku) return data.length + ' SKUs — "' + first.sku + '" qty: ' + first.quantity_available;
-    }
+    if (data.products)        return data.count + ' aircraft — first: "' + data.products[0].name + '" (' + data.products[0].designation + ')';
+    if (data.stock)           return data.count + ' depot entries — "' + data.stock[0].name + '" @ ' + data.stock[0].base + ': ' + data.stock[0].available_lbs + ' lbs avail';
+    if (data.prices)          return data.count + ' cost rates — "' + (data.prices[0].name || data.prices[0].designation) + '" $' + data.prices[0].total_cost_per_hr + '/hr';
+    if (data.reviews)         return data.count + ' AARs — latest: "' + data.reviews[0].title + '" (' + data.reviews[0].rating + '\u2605) by ' + data.reviews[0].author;
+    if (data.orders)          return data.count + ' missions — latest: ' + data.orders[0].id + ' (' + data.orders[0].status + ') ' + data.orders[0].fuel_lbs + ' lbs';
+    if (data.recommendations) return data.count + ' pairings — top: "' + data.recommendations[0].name + '" score: ' + data.recommendations[0].score;
     if (data.count !== undefined && data.items) return data.count + ' items';
     return JSON.stringify(data).slice(0, 120);
   }
@@ -560,11 +558,13 @@
     document.getElementById('search-meta').textContent = '';
     var inp = document.getElementById('search-input');
     if (mode === 'typeahead') {
-      inp.placeholder = 'Start typing for suggestions…';
+      inp.placeholder = 'Start typing for aircraft suggestions…';
     } else if (mode === 'asyoutype') {
-      inp.placeholder = 'Type to search as you go…';
+      inp.placeholder = 'Type to search aircraft as you go…';
+    } else if (mode === 'template') {
+      inp.placeholder = 'Search across aircraft, missions, bases, and crews…';
     } else {
-      inp.placeholder = 'Search products…';
+      inp.placeholder = 'Search aircraft, designations, roles…';
     }
     inp.value = '';
     inp.focus();
@@ -581,15 +581,43 @@
         return '<div class="suggest-item" onclick="applySuggestion(\'' + s.name.replace(/'/g,"\\'") + '\')">' +
           '<span>' + s.name + '</span><span class="sr-cat">' + s.category + '</span></div>';
       }).join('');
+    } else if (data.type === 'template') {
+      var hits = data.results || [];
+      meta.textContent = data.count + ' result' + (data.count !== 1 ? 's' : '') + ' · ' + (data.took_ms || 0) + 'ms · stored search template';
+      if (!hits.length) { el.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:8px;">No results</div>'; return; }
+      el.innerHTML = hits.map(function(h) {
+        var indexLabel = {'aircraft':'Aircraft','missions':'Mission','airbases':'Airbase','crews':'Crew'}[h._index] || h._index;
+        var indexColor = {'aircraft':'#006BB4','missions':'#D4760E','airbases':'#3D7317','crews':'#7B3FA0'}[h._index] || '#555';
+        var hl = h._highlight || {};
+        var hlFields = Object.values(hl);
+        var snippet = hlFields.length ? hlFields[0][0] : '';
+        var primaryName = (hl.name && hl.name[0]) || (hl.full_name && hl.full_name[0]) || h.name || h.full_name || h.icao || h._id;
+        var desc = snippet && snippet !== primaryName ? snippet : (h.description || h.notes || h.city || '');
+        var descHtml = typeof desc === 'string' ? desc.slice(0, 140) : '';
+        var cat = h.category || h.mission_type || h.command || h.role || '';
+        return '<div class="search-result">' +
+          '<div style="flex:1;min-width:0">' +
+            '<div class="sr-name" style="display:flex;align-items:center;gap:6px">' +
+              '<span style="font-size:10px;font-weight:600;padding:1px 5px;border-radius:3px;background:' + indexColor + ';color:#fff;flex-shrink:0">' + indexLabel + '</span>' +
+              '<span>' + primaryName + '</span>' +
+            '</div>' +
+            '<div class="sr-desc">' + descHtml + '</div>' +
+          '</div>' +
+          '<div class="sr-right"><span class="sr-cat">' + cat + '</span>' +
+          '<div class="sr-score">score: ' + (h._score || 0).toFixed(2) + '</div></div>' +
+          '</div>';
+      }).join('');
     } else {
       var hits = data.results || [];
       meta.textContent = data.count + ' result' + (data.count !== 1 ? 's' : '') + ' · ' + (data.took_ms || 0) + 'ms · ' + data.type;
       if (!hits.length) { el.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:8px;">No results</div>'; return; }
       el.innerHTML = hits.map(function(h) {
+        var fuel = h.fuel_capacity_lbs || 0;
+        var fuelLabel = fuel ? fuel.toLocaleString() + ' lbs' : '—';
         return '<div class="search-result"><div><div class="sr-name">' + h.name + '</div>' +
           '<div class="sr-desc">' + (h.description || '').slice(0, 120) + '</div></div>' +
           '<div class="sr-right"><span class="sr-cat">' + (h.category || '') + '</span>' +
-          '<div class="sr-price">$' + (h.price || 0).toFixed(2) + '</div>' +
+          '<div class="sr-price">' + fuelLabel + '</div>' +
           '<div class="sr-score">score: ' + (h._score || 0).toFixed(2) + '</div></div></div>';
       }).join('');
     }
@@ -599,8 +627,9 @@
   function doSearch() {
     var q = document.getElementById('search-input').value.trim();
     if (!q) return;
-    var url = searchMode === 'typeahead' ? '/search/typeahead?q=' :
-              searchMode === 'asyoutype' ? '/search/asyoutype?q=' : '/search?q=';
+    var url = searchMode === 'typeahead'  ? '/search/typeahead?q=' :
+              searchMode === 'asyoutype'  ? '/search/asyoutype?q=' :
+              searchMode === 'template'   ? '/search/template?q=' : '/search?q=';
     fetch(url + encodeURIComponent(q))
       .then(function(r) { return r.json(); })
       .then(renderResults)
@@ -617,8 +646,8 @@
 
   document.getElementById('search-input').addEventListener('input', function() {
     clearTimeout(searchDebounce);
-    if (searchMode === 'typeahead' || searchMode === 'asyoutype') {
-      searchDebounce = setTimeout(doSearch, 200);
+    if (searchMode === 'typeahead' || searchMode === 'asyoutype' || searchMode === 'template') {
+      searchDebounce = setTimeout(doSearch, 300);
     }
   });
 

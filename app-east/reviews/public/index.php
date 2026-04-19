@@ -9,6 +9,7 @@ use Monolog\Logger;
 use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
 use Slim\Factory\AppFactory;
+use MongoDB\Client as MongoClient;
 
 // ── ECS-formatted JSON logger ─────────────────────────────────────────────────
 // Implements the Elastic Common Schema (ECS) log format directly with Monolog.
@@ -37,43 +38,72 @@ $handler->setFormatter(new EcsFormatter());
 $logger = new Logger('east.reviews');
 $logger->pushHandler($handler);
 
-// ── Sample reviews data ───────────────────────────────────────────────────────
+// ── MongoDB connection ───────────────────────────────────────────────────────
+$mongoUrl = getenv('MONGO_URL') ?: 'mongodb://reviews-db:27017';
+$mongoDbName = getenv('MONGO_DB') ?: 'reviews';
+try {
+    $mongo = new MongoClient($mongoUrl);
+    $reviewsCollection = $mongo->selectDatabase($mongoDbName)->selectCollection('reviews');
+} catch (\Throwable $e) {
+    $logger->warning('MongoDB connection failed', ['error.message' => $e->getMessage()]);
+    $reviewsCollection = null;
+}
+
+// ── After Action Reports (AARs) ───────────────────────────────────────────────
 $reviews = [
-    ['id' => 1, 'product_id' => 1, 'author' => 'Alice M.',  'rating' => 5,
-     'title' => 'Scales beautifully',
-     'body'  => 'Handles petabyte workloads without breaking a sweat.',
-     'date'  => '2025-03-01'],
-    ['id' => 2, 'product_id' => 1, 'author' => 'Bob K.',    'rating' => 4,
-     'title' => 'Great performance',
-     'body'  => 'Excellent search performance, setup took a bit of patience.',
-     'date'  => '2025-02-18'],
-    ['id' => 3, 'product_id' => 2, 'author' => 'Carol S.',  'rating' => 5,
-     'title' => 'Best dashboard tool',
-     'body'  => 'Kibana Lens made building dashboards genuinely enjoyable.',
-     'date'  => '2025-03-10'],
-    ['id' => 4, 'product_id' => 3, 'author' => 'Dan T.',    'rating' => 3,
-     'title' => 'Powerful but complex',
-     'body'  => 'Pipeline DSL has a steep learning curve; very capable once mastered.',
-     'date'  => '2025-01-22'],
-    ['id' => 5, 'product_id' => 5, 'author' => 'Eva R.',    'rating' => 5,
-     'title' => 'Fleet management FTW',
-     'body'  => 'Centralised agent management saved us hours per week.',
-     'date'  => '2025-03-15'],
-    ['id' => 6, 'product_id' => 6, 'author' => 'Frank L.',  'rating' => 4,
-     'title' => 'Solid synthetic monitoring',
-     'body'  => 'Browser-based checks caught three outages before our users did.',
-     'date'  => '2025-02-28'],
+    ['id' => 1, 'product_id' => 1, 'author' => 'GHOST 11',  'rating' => 5,
+     'title' => 'Flawless boom transfer at FL350',
+     'body'  => 'KC-135 maintained contact for 45 min while we topped off at 0300Z. Zero oscillation, perfect pressure.',
+     'date'  => '2026-03-01'],
+    ['id' => 2, 'product_id' => 1, 'author' => 'BLADE 23',  'rating' => 4,
+     'title' => 'Solid performance in high turbulence',
+     'body'  => 'Had to abort first approach due to wake vortex, but second contact was clean. Offloaded 60,000 lbs.',
+     'date'  => '2026-02-18'],
+    ['id' => 3, 'product_id' => 2, 'author' => 'RAPTOR 07', 'rating' => 5,
+     'title' => 'KC-46A boom system outperforms legacy',
+     'body'  => 'Remote vision system enabled contact in IMC. Offloaded to 4 receivers in a single sortie.',
+     'date'  => '2026-03-10'],
+    ['id' => 4, 'product_id' => 3, 'author' => 'VIPER 44',  'rating' => 3,
+     'title' => 'Probe-and-drogue workable, prefer boom',
+     'body'  => 'KC-10 drogue basket required 3 attempts. F-16 probe alignment tricky at 450 KTAS.',
+     'date'  => '2026-01-22'],
+    ['id' => 5, 'product_id' => 5, 'author' => 'EAGLE 02',  'rating' => 5,
+     'title' => 'Night AAR over CENTCOM AOR — textbook',
+     'body'  => 'F-15E wet-wing transfer completed at 24,000 ft. Cleared full fuel state for extended strike package.',
+     'date'  => '2026-03-15'],
+    ['id' => 6, 'product_id' => 6, 'author' => 'BONE 91',   'rating' => 4,
+     'title' => 'B-52 fuel state critical, tanker response excellent',
+     'body'  => 'Diverted tanker to support unplanned AAR. KC-10 extended mission by 4 hours.',
+     'date'  => '2026-02-28'],
 ];
 
-// ── Anomaly helper (10-minute / 600-second cycle) ────────────────────────────
+// ── Seed MongoDB if empty (unique index prevents duplicate seeding) ──────────
+if ($reviewsCollection !== null) {
+    try {
+        $reviewsCollection->createIndex(['id' => 1], ['unique' => true]);
+    } catch (\Throwable $e) {
+        // Index may already exist — ignore
+    }
+    if ($reviewsCollection->countDocuments() === 0) {
+        $logger->info('Seeding reviews collection in MongoDB');
+        try {
+            $reviewsCollection->insertMany($reviews, ['ordered' => false]);
+        } catch (\Throwable $e) {
+            // Duplicate key errors from race condition — safe to ignore
+        }
+        $logger->info('Seeded review documents into MongoDB');
+    }
+}
+
+// ── Anomaly helper (4-minute / 240-second cycle) ─────────────────────────────
 function isDegraded(): bool
 {
     if (getenv('ANOMALY_ENABLED') !== 'true') return false;
-    $phase = time() % 600;
-    return $phase >= 460 && $phase <= 510;
+    $phase = time() % 240;
+    return $phase >= 184 && $phase <= 204;
 }
 
-// ── Catalog service URL for product-name enrichment ─────────────────────────
+// ── Catalog service URL for aircraft-name enrichment ─────────────────────────
 $catalogUrl = getenv('CATALOG_URL') ?: 'http://east-catalog:8000';
 
 // ── Slim application ──────────────────────────────────────────────────────────
@@ -89,25 +119,54 @@ $app->get('/health', function (Request $req, Response $res) use ($logger): Respo
     return $res->withHeader('Content-Type', 'application/json');
 });
 
-$app->get('/reviews', function (Request $req, Response $res) use ($logger, $reviews, $catalogUrl): Response {
+$app->get('/reviews', function (Request $req, Response $res) use ($logger, $reviews, $catalogUrl, $reviewsCollection): Response {
     $params      = $req->getQueryParams();
-    $filtered    = $reviews;
     $productId   = isset($params['product_id']) ? (int) $params['product_id'] : null;
-    if ($productId !== null) {
-        $filtered = array_values(array_filter($reviews, fn($r) => $r['product_id'] === $productId));
+
+    // Load reviews from MongoDB (fall back to static array)
+    if ($reviewsCollection !== null) {
+        try {
+            $cursor = $reviewsCollection->find(
+                $productId !== null ? ['product_id' => $productId] : [],
+                ['sort' => ['id' => 1]]
+            );
+            $filtered = [];
+            foreach ($cursor as $doc) {
+                $filtered[] = [
+                    'id' => $doc['id'],
+                    'product_id' => $doc['product_id'],
+                    'author' => $doc['author'],
+                    'rating' => $doc['rating'],
+                    'title' => $doc['title'],
+                    'body' => $doc['body'],
+                    'date' => $doc['date'],
+                ];
+            }
+        } catch (\Throwable $e) {
+            $logger->warning('MongoDB query failed, falling back to static data', ['error.message' => $e->getMessage()]);
+            $filtered = $reviews;
+            if ($productId !== null) {
+                $filtered = array_values(array_filter($reviews, fn($r) => $r['product_id'] === $productId));
+            }
+        }
+    } else {
+        $filtered = $reviews;
+        if ($productId !== null) {
+            $filtered = array_values(array_filter($reviews, fn($r) => $r['product_id'] === $productId));
+        }
     }
 
-    // ── Degraded-mode anomaly (seconds 460-510 of each 600s cycle) ───────
+    // ── Degraded-mode anomaly (seconds 184-204 of each 240s cycle) ───────
     if (isDegraded()) {
         $roll = rand(1, 100);
         if ($roll <= 12) {
             // 12% hard failure — database pool exhausted
-            $logger->error('Database connection pool exhausted', [
+            $logger->error('AAR database connection pool exhausted', [
                 'event.action' => 'db-pool-exhausted',
                 'scenario'     => 'degraded',
             ]);
             $res->getBody()->write(json_encode([
-                'error' => 'database connection pool exhausted — max connections reached',
+                'error' => 'AAR database connection pool exhausted — max connections reached',
             ]));
             return $res->withStatus(500)->withHeader('Content-Type', 'application/json');
         }
@@ -125,10 +184,10 @@ $app->get('/reviews', function (Request $req, Response $res) use ($logger, $revi
 
     usleep($delay);
 
-    // ── Enrich reviews with product names from Catalog service ───────
+    // ── Enrich AARs with aircraft names from Catalog service ─────────────
     $productLookup = [];
     try {
-        $logger->info('Calling catalog service', [
+        $logger->info('Calling aircraft registry service', [
             'event.action' => 'catalog-lookup',
             'catalog_url'  => $catalogUrl . '/products',
         ]);
@@ -140,32 +199,32 @@ $app->get('/reviews', function (Request $req, Response $res) use ($logger, $revi
                     $productLookup[$product['id']] = $product['name'];
                 }
             }
-            $logger->info('Catalog enrichment succeeded', [
-                'event.action'  => 'catalog-lookup-success',
-                'product_count' => count($productLookup),
+            $logger->info('Aircraft registry enrichment succeeded', [
+                'event.action'   => 'catalog-lookup-success',
+                'aircraft_count' => count($productLookup),
             ]);
         } else {
-            $logger->warning('Catalog service returned empty response', [
+            $logger->warning('Aircraft registry service returned empty response', [
                 'event.action' => 'catalog-lookup-failed',
             ]);
         }
     } catch (\Throwable $e) {
-        $logger->warning('Catalog enrichment failed, returning reviews without product names', [
+        $logger->warning('Aircraft registry enrichment failed, returning AARs without aircraft names', [
             'event.action' => 'catalog-lookup-error',
             'error.message' => $e->getMessage(),
         ]);
     }
 
-    // Add product_name to each review if lookup is available
+    // Add aircraft_name to each AAR if lookup is available
     $filtered = array_map(function ($review) use ($productLookup) {
         $review['product_name'] = $productLookup[$review['product_id']] ?? null;
         return $review;
     }, $filtered);
 
-    $logger->info('Reviews returned', [
-        'review_count' => count($filtered),
-        'product_id'   => $productId,
-        'delay_ms'     => intdiv($delay, 1000),
+    $logger->info('AARs returned', [
+        'aar_count'  => count($filtered),
+        'product_id' => $productId,
+        'delay_ms'   => intdiv($delay, 1000),
     ]);
     $res->getBody()->write(json_encode([
         'reviews' => $filtered,
@@ -174,18 +233,47 @@ $app->get('/reviews', function (Request $req, Response $res) use ($logger, $revi
     return $res->withHeader('Content-Type', 'application/json');
 });
 
-$app->get('/reviews/{id}', function (Request $req, Response $res, array $args) use ($logger, $reviews): Response {
+$app->get('/reviews/{id}', function (Request $req, Response $res, array $args) use ($logger, $reviews, $reviewsCollection): Response {
     $id    = (int) $args['id'];
-    $match = array_values(array_filter($reviews, fn($r) => $r['id'] === $id));
-    if (empty($match)) {
-        $logger->warning('Review not found', ['review_id' => $id]);
-        $res->getBody()->write(json_encode(['error' => "Review $id not found"]));
+    $match = null;
+
+    // Try MongoDB first
+    if ($reviewsCollection !== null) {
+        try {
+            $doc = $reviewsCollection->findOne(['id' => $id]);
+            if ($doc !== null) {
+                $match = [
+                    'id' => $doc['id'],
+                    'product_id' => $doc['product_id'],
+                    'author' => $doc['author'],
+                    'rating' => $doc['rating'],
+                    'title' => $doc['title'],
+                    'body' => $doc['body'],
+                    'date' => $doc['date'],
+                ];
+            }
+        } catch (\Throwable $e) {
+            $logger->warning('MongoDB query failed, falling back to static data', ['error.message' => $e->getMessage()]);
+        }
+    }
+
+    // Fall back to static array
+    if ($match === null) {
+        $staticMatch = array_values(array_filter($reviews, fn($r) => $r['id'] === $id));
+        if (!empty($staticMatch)) {
+            $match = $staticMatch[0];
+        }
+    }
+
+    if ($match === null) {
+        $logger->warning('AAR not found', ['aar_id' => $id]);
+        $res->getBody()->write(json_encode(['error' => "AAR $id not found"]));
         return $res->withStatus(404)->withHeader('Content-Type', 'application/json');
     }
-    $logger->info('Review retrieved', ['review_id' => $id]);
-    $res->getBody()->write(json_encode($match[0]));
+    $logger->info('AAR retrieved', ['aar_id' => $id]);
+    $res->getBody()->write(json_encode($match));
     return $res->withHeader('Content-Type', 'application/json');
 });
 
-$logger->info('Reviews service started');
+$logger->info('After Action Reports service started');
 $app->run();

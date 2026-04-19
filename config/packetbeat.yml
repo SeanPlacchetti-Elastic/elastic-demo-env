@@ -1,0 +1,70 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Packetbeat — network traffic between microservices on the east cluster.
+# Runs with network_mode: host so it can see traffic across Docker bridges.
+# Ships to east-es01 via the exposed host port (localhost:${EAST_ES_PORT}).
+# ─────────────────────────────────────────────────────────────────────────────
+
+packetbeat.interfaces.device: any
+packetbeat.interfaces.snaplen: 1514
+packetbeat.interfaces.type: af_packet
+
+# Flow records — one summary record per network conversation. This is what
+# feeds the Network section of the Elastic Security solution.
+packetbeat.flows:
+  timeout: 30s
+  period: 10s
+
+packetbeat.protocols:
+  # Microservice HTTP (cluster-internal plaintext traffic on port 8000;
+  # plus APM server HTTP on 8200/8201). Do NOT add gateway ports 8001/8002
+  # here — those are HTTPS and belong to the TLS decoder below.
+  - type: http
+    ports: [80, 8000, 8200, 8201]
+    real_ip_header: "X-Forwarded-For"
+    send_request: false
+    send_response: false
+    include_body_for: []
+
+  # Database protocol decoders — visibility into queries hitting each microservice DB
+  - type: pgsql
+    ports: [5432]
+  - type: mysql
+    ports: [3306]
+  - type: mongodb
+    ports: [27017]
+
+  # TLS handshakes — cluster transport, Kibana, gateway HTTPS. Ports here must
+  # NOT overlap with the http decoder.
+  - type: tls
+    ports: [443, 5601, 5602, 5603, 8001, 8002, 9200, 9201, 9202]
+    send_certificates: true
+
+  - type: dns
+    ports: [53]
+
+  - type: icmp
+    enabled: true
+
+# Ignore Elasticsearch's own self-chatter on 9300 (cluster transport) —
+# otherwise every heartbeat floods the indices.
+packetbeat.ignore_outgoing: false
+
+processors:
+  - add_host_metadata: ~
+  - add_cloud_metadata: ~
+  - add_docker_metadata: ~
+
+# ── Output to east cluster (via exposed port since we're on host network) ──
+output.elasticsearch:
+  hosts: ["https://localhost:${EAST_ES_PORT:9201}"]
+  username: elastic
+  password: "${ELASTIC_PASSWORD}"
+  ssl.certificate_authorities: ["/usr/share/packetbeat/certs/ca/ca.crt"]
+  ssl.verification_mode: none
+
+setup.template.enabled: true
+setup.ilm.enabled: true
+
+logging.level: info
+logging.to_stderr: true
+logging.metrics.enabled: false

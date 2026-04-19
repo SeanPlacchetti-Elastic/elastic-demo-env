@@ -1,0 +1,59 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Auditbeat — file integrity monitoring + system/process/socket events for the
+# Elastic Security solution. Ships to east-es01 over the net-east bridge.
+# ─────────────────────────────────────────────────────────────────────────────
+
+auditbeat.modules:
+
+  # ── File Integrity Monitoring ───────────────────────────────────────────
+  # Watches demo-relevant paths — changes to any of these files generate
+  # FIM events visible in the Security solution's Hosts section.
+  - module: file_integrity
+    paths:
+      - /audit/certs        # shared TLS certs volume (tampering = critical)
+      - /hostfs/etc
+      - /hostfs/usr/bin
+      - /hostfs/usr/sbin
+    exclude_files:
+      - '(?i)\.sw[nop]$'
+      - '~$'
+      - '/\.git($|/)'
+    recursive: true
+    hash_types: [sha256]
+    max_file_size: 100 MiB
+
+  # ── System module ──────────────────────────────────────────────────────
+  # Host-level security audit: process execution, socket connections,
+  # login/logout, package installs, user/group changes.
+  - module: system
+    datasets:
+      - host
+      - login
+      - package
+      - process
+      - user
+    period: 30s
+    state.period: 12h
+    process.hash.hash_types: [sha256]
+    user.detect_password_changes: true
+
+processors:
+  - add_host_metadata: ~
+  - add_cloud_metadata: ~
+  - add_docker_metadata: ~
+  - add_process_metadata:
+      match_pids: [process.pid]
+      target: process
+
+output.elasticsearch:
+  hosts: ["https://east-es01:9200"]
+  username: elastic
+  password: "${ELASTIC_PASSWORD}"
+  ssl.certificate_authorities: ["/usr/share/auditbeat/certs/ca/ca.crt"]
+
+setup.template.enabled: true
+setup.ilm.enabled: true
+
+logging.level: info
+logging.to_stderr: true
+logging.metrics.enabled: false

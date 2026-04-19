@@ -117,7 +117,7 @@ services:
           -u "elastic:${ELASTIC_PASSWORD}" \
           -X PUT "https://kibana-east:5601/api/fleet/outputs/fleet-default-output" \
           -H "Content-Type: application/json" -H "kbn-xsrf: true" \
-          -d "{\"name\":\"default\",\"type\":\"elasticsearch\",\"hosts\":[\"https://east-es01:9200\"],\"is_default\":true,\"is_default_monitoring\":true,\"config_yaml\":\"ssl.certificate_authorities: [\\\\\\\"\/usr\/share\/elastic-agent\/certs\/ca\/ca.crt\\\\\\\"]\\nssl.verification_mode: certificate\"}"
+          -d "{\"name\":\"default\",\"type\":\"elasticsearch\",\"hosts\":[\"https://east-es01:9200\"],\"is_default\":true,\"is_default_monitoring\":true,\"config_yaml\":\"ssl.verification_mode: none\"}"
         echo "Fleet output updated."
 
         echo "=== fleet-setup complete ==="
@@ -269,19 +269,20 @@ services:
 
         echo "=== Writing browser journey scripts to /tmp ==="
 
-        # ── Journey 1: Customer Shopping Journey (East Gateway) ───────────────
-        # A shopper loads the gateway UI and clicks through every downstream
-        # service: Catalog (Java) → Inventory (Go) → Pricing (.NET) →
-        # Reviews (PHP) → Recommendations (Rust) → Orders (Ruby).
+        # ── Journey 1: Refueling Mission Ops Journey (East Gateway) ─────────────
+        # A mission coordinator loads the ops gateway and steps through every
+        # downstream service: Aircraft Registry (Java) → Fuel Depot (Go) →
+        # Mission Costs (.NET) → AARs (PHP) → Tanker Pairings (Rust) →
+        # Active Missions (Ruby).  Also exercises the aircraft registry search.
         # Each step generates a distributed APM trace spanning all 7 languages.
-        EAST_SCRIPT=$'step(\'Load storefront\', async () => {\n  await page.goto(params.url);\n  await page.locator(\'h1.page-title\').waitFor({ timeout: 10000 });\n});\n\nstep(\'Browse product catalog (Java)\', async () => {\n  const respPromise = page.waitForResponse(r => r.url().includes(\'/catalog\'));\n  await page.locator(\'button.btn-catalog\').click();\n  await respPromise;\n});\n\nstep(\'Check inventory levels (Go)\', async () => {\n  const respPromise = page.waitForResponse(r => r.url().includes(\'/inventory\'));\n  await page.locator(\'button.btn-inventory\').click();\n  await respPromise;\n});\n\nstep(\'Compare prices (.NET)\', async () => {\n  const respPromise = page.waitForResponse(r => r.url().includes(\'/pricing\'));\n  await page.locator(\'button.btn-pricing\').click();\n  await respPromise;\n});\n\nstep(\'Read customer reviews (PHP)\', async () => {\n  const respPromise = page.waitForResponse(r => r.url().includes(\'/reviews\'));\n  await page.locator(\'button.btn-reviews\').click();\n  await respPromise;\n});\n\nstep(\'Get recommendations (Rust)\', async () => {\n  const respPromise = page.waitForResponse(r => r.url().includes(\'/recommendations\'));\n  await page.locator(\'button.btn-recommendations\').click();\n  await respPromise;\n});\n\nstep(\'Review order history (Ruby)\', async () => {\n  const respPromise = page.waitForResponse(r => r.url().includes(\'/orders\'));\n  await page.locator(\'button.btn-orders\').click();\n  await respPromise;\n  const rows = await page.locator(\'#log-scroll .log-row\').count();\n  if (rows < 6) throw new Error(\'Expected at least 6 activity log rows, got \' + rows);\n});'
+        EAST_SCRIPT=$'step(\'Load ops gateway\', async () => {\n  await page.goto(params.url);\n  await page.locator(\'h1.euiTitle\').waitFor({ timeout: 10000 });\n});\n\nstep(\'Fetch aircraft registry (Java)\', async () => {\n  const respPromise = page.waitForResponse(r => r.url().includes(\'/catalog\'));\n  await page.locator(\'button.btn-catalog\').click();\n  await respPromise;\n});\n\nstep(\'Check fuel depot levels (Go)\', async () => {\n  const respPromise = page.waitForResponse(r => r.url().includes(\'/inventory\'));\n  await page.locator(\'button.btn-inventory\').click();\n  await respPromise;\n});\n\nstep(\'Get mission cost rates (.NET)\', async () => {\n  const respPromise = page.waitForResponse(r => r.url().includes(\'/pricing\'));\n  await page.locator(\'button.btn-pricing\').click();\n  await respPromise;\n});\n\nstep(\'Read after action reports (PHP)\', async () => {\n  const respPromise = page.waitForResponse(r => r.url().includes(\'/reviews\'));\n  await page.locator(\'button.btn-reviews\').click();\n  await respPromise;\n});\n\nstep(\'Get tanker pairings (Rust)\', async () => {\n  const respPromise = page.waitForResponse(r => r.url().includes(\'/recommendations\'));\n  await page.locator(\'button.btn-recommendations\').click();\n  await respPromise;\n});\n\nstep(\'View active missions (Ruby)\', async () => {\n  const respPromise = page.waitForResponse(r => r.url().includes(\'/orders\'));\n  await page.locator(\'button.btn-orders\').click();\n  await respPromise;\n  const rows = await page.locator(\'#log-scroll .log-row\').count();\n  if (rows < 6) throw new Error(\'Expected at least 6 activity log rows, got \' + rows);\n});\n\nstep(\'Search aircraft registry — KC-135\', async () => {\n  const respPromise = page.waitForResponse(r => r.url().includes(\'/search\'));\n  await page.locator(\'#search-input\').fill(\'KC-135\');\n  await page.locator(\'button.search-btn\').click();\n  await respPromise;\n});'
         printf '%s\n' "$$EAST_SCRIPT" > /tmp/east-journey.js
 
         # ── Journey 2: APM Error Tracking & Custom Events (West Webapp) ───────
         # A QA engineer verifies APM instrumentation: triggers a ZeroDivisionError
         # to confirm APM error capture is working, then sends a custom tagged
         # message to verify custom event ingestion.
-        WEST_SCRIPT=$'step(\'Load APM demo\', async () => {\n  await page.goto(params.url);\n  await page.locator(\'h1.page-title\').waitFor({ timeout: 10000 });\n});\n\nstep(\'Trigger ZeroDivisionError (APM error capture)\', async () => {\n  const respPromise = page.waitForResponse(r => r.url().includes(\'/error\'));\n  await page.locator(\'button.btn-danger\').click();\n  await respPromise;\n});\n\nstep(\'Send custom APM message\', async () => {\n  await page.locator(\'#msg-input\').fill(\'synthetic-monitor-check\');\n  const respPromise = page.waitForResponse(r => r.url().includes(\'/custom_message\'));\n  await page.locator(\'button.btn-primary\').click();\n  await respPromise;\n  const rows = await page.locator(\'#log-scroll .log-row\').count();\n  if (rows < 2) throw new Error(\'Expected at least 2 log entries, got \' + rows);\n});'
+        WEST_SCRIPT=$'step(\'Load APM demo\', async () => {\n  await page.goto(params.url);\n  await page.locator(\'h1.euiTitle\').waitFor({ timeout: 10000 });\n});\n\nstep(\'Trigger ZeroDivisionError (APM error capture)\', async () => {\n  const respPromise = page.waitForResponse(r => r.url().includes(\'/error\'));\n  await page.locator(\'button.btn-danger\').click();\n  await respPromise;\n});\n\nstep(\'Send custom APM message\', async () => {\n  await page.locator(\'#msg-input\').fill(\'synthetic-monitor-check\');\n  const respPromise = page.waitForResponse(r => r.url().includes(\'/custom_message\'));\n  await page.locator(\'button.btn-primary\').click();\n  await respPromise;\n  const rows = await page.locator(\'#log-scroll .log-row\').count();\n  if (rows < 2) throw new Error(\'Expected at least 2 log entries, got \' + rows);\n});'
         printf '%s\n' "$$WEST_SCRIPT" > /tmp/west-journey.js
 
         # ── Journey 3: Demo Launchpad Health Check (Landing Page) ─────────────
@@ -291,23 +292,32 @@ services:
         LAND_SCRIPT=$'step(\'Load demo launchpad\', async () => {\n  await page.goto(params.url);\n  await page.locator(\'h1\').waitFor({ timeout: 10000 });\n});\n\nstep(\'Verify Kibana cluster links present\', async () => {\n  await page.locator(\'a[href="https://localhost:5601"]\').waitFor({ timeout: 5000 });\n  await page.locator(\'a[href="https://localhost:5602"]\').waitFor({ timeout: 5000 });\n});\n\nstep(\'Verify east gateway link and demo description\', async () => {\n  await page.locator(\'a[href="https://localhost:8001"]\').waitFor({ timeout: 5000 });\n  await page.locator(\'h2:has-text("What this demo covers")\').waitFor({ timeout: 5000 });\n});'
         printf '%s\n' "$$LAND_SCRIPT" > /tmp/land-journey.js
 
-        echo "=== Posting browser monitors ==="
-        post_browser() {
-          local mon_name="$$1" mon_url="$$2" script_file="$$3" sched="$$4"
-          # JSON-escape the script: backslash → \\, double-quote → \", newline → \n, tab → \t
-          ESCAPED=$$(sed 's/\\/\\\\/g; s/"/\\"/g' "$$script_file" | awk '{printf "%s\\n",$0}' | sed 's/\\n$$//')
+        echo "=== Upserting browser monitors (delete-then-create for idempotency) ==="
+        upsert_browser() {
+          local MON_NAME="$$1" MON_URL="$$2" SCRIPT_FILE="$$3" SCHED="$$4"
+          # Fetch all monitors; find existing by name; delete it if present
+          ALL_MONS=$$(curl -sf --cacert $$CA -u "elastic:${ELASTIC_PASSWORD}" "$$KB/api/synthetics/monitors?perPage=200" 2>/dev/null || echo '{"monitors":[]}')
+          EXISTING_ID=$$(echo "$$ALL_MONS" | MON_NAME_ENV="$$MON_NAME" python3 -c "import sys,json,os; d=json.load(sys.stdin); [print(m['id']) for m in d.get('monitors',[]) if m.get('name')==os.environ.get('MON_NAME_ENV','')]" 2>/dev/null | head -1 || true)
+          if [ -n "$$EXISTING_ID" ]; then
+            curl -s --cacert $$CA -u "elastic:${ELASTIC_PASSWORD}" \
+              -X DELETE "$$KB/api/synthetics/monitors/$$EXISTING_ID" \
+              -H "kbn-xsrf: true" > /dev/null \
+              && echo "  ~ removed stale: $$MON_NAME"
+          fi
+          # JSON-escape the script: backslash → \\, double-quote → \", newline → \n
+          ESCAPED=$$(sed 's/\\/\\\\/g; s/"/\\"/g' "$$SCRIPT_FILE" | awk '{printf "%s\\n",$0}' | sed 's/\\n$$//')
           printf '{"name":"%s","type":"browser","schedule":{"number":"%s","unit":"m"},"enabled":true,"locations":[{"id":"%s","isServiceManaged":false}],"source":{"inline":{"script":"%s"}},"params":{"url":"%s"},"playwright_options":{"ignoreHTTPSErrors":true}}\n' \
-            "$$mon_name" "$$sched" "$$LOC_ID" "$$ESCAPED" "$$mon_url" > /tmp/monitor.json
+            "$$MON_NAME" "$$SCHED" "$$LOC_ID" "$$ESCAPED" "$$MON_URL" > /tmp/monitor.json
           curl -sf --cacert $$CA -u "elastic:${ELASTIC_PASSWORD}" \
             -X POST "$$KB/api/synthetics/monitors" \
             -H "Content-Type: application/json" -H "kbn-xsrf: true" \
             --data @/tmp/monitor.json > /dev/null \
-            && echo "  + $$mon_name" || echo "  - $$mon_name (may already exist)"
+            && echo "  + $$MON_NAME" || echo "  ! failed: $$MON_NAME"
         }
 
-        post_browser "cluster-east | Customer Shopping Journey [browser]"            "https://east-gateway:8000/"  /tmp/east-journey.js 10
-        post_browser "cluster-west | APM Error Tracking and Custom Events [browser]" "https://west-webapp:8000/"   /tmp/west-journey.js 15
-        post_browser "shared | Demo Launchpad Health Check [browser]"                "https://landing/"            /tmp/land-journey.js 20
+        upsert_browser "cluster-east | Refueling Mission Ops Journey [browser]"         "https://east-gateway:8000/"  /tmp/east-journey.js 10
+        upsert_browser "cluster-west | APM Error Tracking and Custom Events [browser]" "https://west-webapp:8000/"   /tmp/west-journey.js 15
+        upsert_browser "shared | Demo Launchpad Health Check [browser]"                "https://landing/"            /tmp/land-journey.js 20
 
         touch config/certs/tokens/synthetics-monitors-created
         echo "=== synthetics-setup complete ==="
@@ -349,9 +359,9 @@ services:
       - "../loadgen/loadgen.sh:/loadgen.sh:ro"
     entrypoint: ["/bin/sh", "/loadgen.sh"]
     environment:
-      - DEV_GATEWAY_URL=https://east-gateway:8000
-      - PROD_GATEWAY_URL=https://prod-gateway:8000
-      - WEST_WEBAPP_URL=https://west-webapp:8000
+      - DEV_GATEWAY_URL=https://localhost:8001
+      - PROD_GATEWAY_URL=https://localhost:8002
+      - WEST_WEBAPP_URL=https://localhost:8000
       - LOADGEN_INTERVAL=3
     depends_on:
       - west-webapp
@@ -360,8 +370,10 @@ services:
     restart: unless-stopped
 
   # ── ML anomaly detection setup ──────────────────────────────────────────────
-  # One-shot: creates and starts ML anomaly detection jobs for APM latency and
-  # error rate.  Idempotent — uses a sentinel file on the certs volume.
+  # One-shot: creates and starts ML anomaly detection jobs.
+  # Includes the three built-in Observability modules (APM anomaly detection,
+  # log rate analysis, log categorization) plus custom demo jobs.
+  # Idempotent — uses a sentinel file on the certs volume.
   ml-setup:
     image: docker.elastic.co/elasticsearch/elasticsearch:${STACK_VERSION}
     user: "0"
@@ -392,7 +404,12 @@ services:
           echo "  ES not ready..."; sleep 15
         done
 
-        # Helper: create job, then its datafeed, then open+start
+        echo "=== Waiting for Kibana ==="
+        until curl -sf --cacert $$CA -u "elastic:${ELASTIC_PASSWORD}" "$$KB/api/status" | grep -q '"level":"available"'; do
+          echo "  Kibana not ready..."; sleep 15
+        done
+
+        # Helper: create custom job, then its datafeed, then open+start
         create_ml() {
           local JOB_ID="$$1" JOB_JSON="$$2" FEED_JSON="$$3"
           echo "--- Creating job: $$JOB_ID ---"
@@ -414,7 +431,61 @@ services:
             && echo "  Datafeed started" || echo "  Datafeed may already be running"
         }
 
-        echo "=== Creating ML anomaly detection jobs ==="
+        echo "=== Setting up built-in Observability ML modules ==="
+
+        # APM anomaly detection (Observability > APM > Anomaly detection)
+        # Uses the APM API which creates the correct prefixed job for the 'production' environment
+        echo "--- Setting up APM anomaly detection (production) ---"
+        curl -sf --cacert $$CA -u "elastic:${ELASTIC_PASSWORD}" \
+          -X POST "$$KB/internal/apm/settings/anomaly-detection/jobs" \
+          -H "Content-Type: application/json" -H "kbn-xsrf: true" \
+          -d '{"environments":["production"]}' > /dev/null \
+          && echo "  APM anomaly detection configured" || echo "  APM anomaly detection may already exist"
+
+        # Log rate analysis and log categorization require hashed job IDs that Kibana's
+        # infra plugin looks up. The hash is computed from spaceId="default" and logViewId="default"
+        # using UUID v5 with namespace f91b78c0-fdd3-425d-a4ba-4c028fe57e0f.
+        # Result: logs-11558ee526445db2b42eb3d6b4af58d0-{job-type}
+        LOG_PREFIX="logs-11558ee526445db2b42eb3d6b4af58d0-"
+
+        # Log rate analysis (Observability > Logs > Log rate analysis)
+        echo "--- Setting up log rate analysis ---"
+        curl -sf --cacert $$CA -u "elastic:${ELASTIC_PASSWORD}" \
+          -X POST "$$KB/internal/ml/modules/setup/logs_ui_analysis" \
+          -H "Content-Type: application/json" -H "kbn-xsrf: true" \
+          -d "{\"prefix\":\"$$LOG_PREFIX\",\"groups\":[\"logs\",\"observability\"],\"indexPatternName\":\"logs-*,filebeat-*\",\"startDatafeed\":true,\"start\":0}" \
+          > /dev/null \
+          && echo "  Log rate analysis configured" || echo "  Log rate analysis may already exist"
+
+        # Log categorization (Observability > Logs > Log categories)
+        echo "--- Setting up log categorization ---"
+        curl -sf --cacert $$CA -u "elastic:${ELASTIC_PASSWORD}" \
+          -X POST "$$KB/internal/ml/modules/setup/logs_ui_categories" \
+          -H "Content-Type: application/json" -H "kbn-xsrf: true" \
+          -d "{\"prefix\":\"$$LOG_PREFIX\",\"groups\":[\"logs\",\"observability\"],\"indexPatternName\":\"logs-*,filebeat-*\",\"startDatafeed\":true,\"start\":0}" \
+          > /dev/null \
+          && echo "  Log categorization configured" || echo "  Log categorization may already exist"
+
+        # Patch logs_source_config into both log jobs so Kibana doesn't flag them as
+        # "outdated configuration". Kibana's infra plugin checks custom_settings.logs_source_config
+        # against the current log view source; without it the jobs always appear outdated.
+        # bucketSpan=900000ms (15m), indices match the infra plugin default LOGS_INDEX_PATTERN.
+        # indexPattern must exactly match DEFAULT_LOG_SOURCES from @kbn/logs-data-access-plugin:
+        # ['logs-*-*', 'logs-*', 'filebeat-*'] — Kibana checks isSubset against these indices.
+        LOG_SOURCE_CFG='{"indexPattern":"logs-*-*,logs-*,filebeat-*","timestampField":"@timestamp","bucketSpan":900000}'
+        for LOG_JOB in "log-entry-rate:ml-module-logs-ui-analysis" "log-entry-categories-count:ml-module-logs-ui-categories"; do
+          JOB_TYPE="$${LOG_JOB%%:*}"
+          CREATED_BY="$${LOG_JOB##*:}"
+          JOB_ID="$$LOG_PREFIX$$JOB_TYPE"
+          curl -sf --cacert $$CA -u "elastic:${ELASTIC_PASSWORD}" \
+            -X POST "$$ES/_ml/anomaly_detectors/$$JOB_ID/_update" \
+            -H "Content-Type: application/json" \
+            -d "{\"custom_settings\":{\"managed\":true,\"created_by\":\"$$CREATED_BY\",\"job_revision\":2,\"logs_source_config\":$$LOG_SOURCE_CFG}}" \
+            > /dev/null \
+            && echo "  Patched logs_source_config on $$JOB_ID" || echo "  Could not patch $$JOB_ID"
+        done
+
+        echo "=== Creating custom ML anomaly detection jobs ==="
         create_ml "demo-apm-error-rate" \
           '{"description":"Detects unusual error rates per service","analysis_config":{"bucket_span":"5m","detectors":[{"function":"high_count","partition_field_name":"service.name"}],"influencers":["service.name"]},"analysis_limits":{"model_memory_limit":"25mb"},"data_description":{"time_field":"@timestamp"},"model_plot_config":{"enabled":true,"annotations_enabled":true},"results_index_name":"custom-demo-ml"}' \
           '{"job_id":"demo-apm-error-rate","indices":["traces-apm*","logs-apm*"],"query":{"bool":{"filter":[{"term":{"event.outcome":"failure"}}]}}}'
@@ -570,6 +641,183 @@ services:
         mkdir -p config/certs/tokens
         touch config/certs/tokens/alerts-created
         echo "=== alert-setup complete ==="
+
+  # ── Observability alert setup (east Kibana — default observability rules) ──────
+  # One-shot: creates the standard built-in alerting rules for APM, logs,
+  # infrastructure, synthetics, and ML health in kibana-east.
+  # Idempotent — uses a sentinel file on the certs volume.
+  east-alert-setup:
+    image: docker.elastic.co/elasticsearch/elasticsearch:${STACK_VERSION}
+    user: "0"
+    depends_on:
+      kibana-east:
+        condition: service_healthy
+    networks:
+      - net-east
+    volumes:
+      - certs:/usr/share/elasticsearch/config/certs
+    environment:
+      - ELASTIC_PASSWORD=${ELASTIC_PASSWORD}
+    command:
+      - bash
+      - -c
+      - |
+        set -e
+        CA="config/certs/ca/ca.crt"
+        KB="https://kibana-east:5601"
+
+        if [ -f config/certs/tokens/east-alerts-created ]; then
+          echo "East alerts already created — skipping."; exit 0
+        fi
+
+        echo "=== Waiting for Kibana-East ==="
+        until curl -sf --cacert $$CA -u "elastic:${ELASTIC_PASSWORD}" \
+            "$$KB/api/status" 2>/dev/null | grep -q '"level":"available"'; do
+          echo "  Kibana not ready..."; sleep 15
+        done
+
+        create_rule() {
+          local NAME="$$1" JSON="$$2"
+          curl -sf --cacert $$CA -u "elastic:${ELASTIC_PASSWORD}" \
+            -X POST "$$KB/api/alerting/rule" \
+            -H "Content-Type: application/json" -H "kbn-xsrf: true" \
+            -d "$$JSON" > /dev/null \
+            && echo "  + $$NAME" || echo "  ($$NAME may already exist)"
+        }
+
+        echo "=== Creating APM observability rules ==="
+
+        create_rule "APM — Error Rate Threshold" \
+          '{"name":"APM — Error Rate Threshold","rule_type_id":"apm.error_rate","consumer":"apm","schedule":{"interval":"5m"},"params":{"windowSize":5,"windowUnit":"m","threshold":25,"environment":"ENVIRONMENT_ALL","groupBy":["service.name","service.environment"],"useKqlFilter":false},"actions":[],"tags":["observability","apm","error-rate"],"enabled":true}'
+
+        create_rule "APM — Transaction Error Rate Threshold" \
+          '{"name":"APM — Transaction Error Rate Threshold","rule_type_id":"apm.transaction_error_rate","consumer":"apm","schedule":{"interval":"5m"},"params":{"windowSize":5,"windowUnit":"m","threshold":25,"environment":"ENVIRONMENT_ALL","groupBy":["service.name","service.environment","transaction.type"]},"actions":[],"tags":["observability","apm","error-rate"],"enabled":true}'
+
+        create_rule "APM — P99 Latency Threshold" \
+          '{"name":"APM — P99 Latency Threshold","rule_type_id":"apm.transaction_duration","consumer":"apm","schedule":{"interval":"5m"},"params":{"windowSize":5,"windowUnit":"m","threshold":1500,"environment":"ENVIRONMENT_ALL","aggregationType":"99th","groupBy":["service.name","service.environment","transaction.type"]},"actions":[],"tags":["observability","apm","latency"],"enabled":true}'
+
+        create_rule "APM — Anomaly Detected" \
+          '{"name":"APM — Anomaly Detected","rule_type_id":"apm.anomaly","consumer":"apm","schedule":{"interval":"15m"},"params":{"windowSize":30,"windowUnit":"m","anomalySeverityType":"critical","environment":"ENVIRONMENT_ALL"},"actions":[],"tags":["observability","apm","anomaly"],"enabled":true}'
+
+        echo "=== Creating Logs observability rules ==="
+
+        create_rule "Logs — Elevated Error Log Rate" \
+          '{"name":"Logs — Elevated Error Log Rate","rule_type_id":"logs.alert.document.count","consumer":"logs","schedule":{"interval":"5m"},"params":{"timeSize":5,"timeUnit":"m","count":{"value":25,"comparator":"more than"},"criteria":[{"field":"log.level","comparator":"equals","value":"error"}],"logView":{"type":"log-view-reference","logViewId":"default"}},"actions":[],"tags":["observability","logs","error-rate"],"enabled":true}'
+
+        echo "=== Creating Infrastructure observability rules ==="
+
+        create_rule "Infrastructure — High CPU Usage" \
+          '{"name":"Infrastructure — High CPU Usage","rule_type_id":"metrics.alert.threshold","consumer":"infrastructure","schedule":{"interval":"1m"},"params":{"criteria":[{"aggType":"avg","comparator":">","threshold":[90],"timeSize":5,"timeUnit":"m","metric":"system.cpu.total.norm.pct"}],"sourceId":"default","alertOnNoData":false,"alertOnGroupDisappear":false},"actions":[],"tags":["observability","infrastructure","cpu"],"enabled":true}'
+
+        create_rule "Infrastructure — High Memory Usage" \
+          '{"name":"Infrastructure — High Memory Usage","rule_type_id":"metrics.alert.inventory.threshold","consumer":"infrastructure","schedule":{"interval":"1m"},"params":{"nodeType":"host","criteria":[{"metric":"memory","comparator":">","threshold":[90],"timeSize":5,"timeUnit":"m","warningThreshold":[],"warningComparator":">"}],"sourceId":"default","alertOnNoData":false,"alertOnGroupDisappear":false},"actions":[],"tags":["observability","infrastructure","memory"],"enabled":true}'
+
+        echo "=== Creating Synthetics observability rules ==="
+
+        create_rule "Synthetics — Monitor Status" \
+          '{"name":"Synthetics — Monitor Status","rule_type_id":"xpack.synthetics.alerts.monitorStatus","consumer":"uptime","schedule":{"interval":"1m"},"params":{},"actions":[],"tags":["observability","synthetics","uptime"],"enabled":true}'
+
+        create_rule "Synthetics — TLS Certificate Expiry" \
+          '{"name":"Synthetics — TLS Certificate Expiry","rule_type_id":"xpack.synthetics.alerts.tls","consumer":"uptime","schedule":{"interval":"1d"},"params":{},"actions":[],"tags":["observability","synthetics","tls"],"enabled":true}'
+
+        echo "=== Creating ML health rules ==="
+
+        create_rule "ML — Anomaly Detection Jobs Health" \
+          '{"name":"ML — Anomaly Detection Jobs Health","rule_type_id":"xpack.ml.anomaly_detection_jobs_health","consumer":"alerts","schedule":{"interval":"15m"},"params":{"includeJobs":{"jobIds":["demo-apm-error-rate","demo-latency-outliers","demo-log-rate"]},"testsConfig":null},"actions":[],"tags":["observability","ml","health"],"enabled":true}'
+
+        mkdir -p config/certs/tokens
+        touch config/certs/tokens/east-alerts-created
+        echo "=== east-alert-setup complete ==="
+
+  # ── SLO setup (east Kibana — APM-based SLOs for each microservice) ───────────
+  # One-shot: creates availability and latency SLOs in kibana-east for all 7
+  # east microservices.  Idempotent — uses a sentinel file on the certs volume.
+  slo-setup:
+    image: docker.elastic.co/elasticsearch/elasticsearch:${STACK_VERSION}
+    user: "0"
+    depends_on:
+      kibana-east:
+        condition: service_healthy
+    networks:
+      - net-east
+    volumes:
+      - certs:/usr/share/elasticsearch/config/certs
+    environment:
+      - ELASTIC_PASSWORD=${ELASTIC_PASSWORD}
+    command:
+      - bash
+      - -c
+      - |
+        set -e
+        CA="config/certs/ca/ca.crt"
+        KB="https://kibana-east:5601"
+
+        if [ -f config/certs/tokens/slos-created ]; then
+          echo "SLOs already created — skipping."; exit 0
+        fi
+
+        echo "=== Waiting for Kibana-East ==="
+        until curl -sf --cacert $$CA -u "elastic:${ELASTIC_PASSWORD}" \
+            "$$KB/api/status" 2>/dev/null | grep -q '"level":"available"'; do
+          echo "  Kibana not ready..."; sleep 15
+        done
+
+        create_slo() {
+          local NAME="$$1" JSON="$$2"
+          curl -sf --cacert $$CA -u "elastic:${ELASTIC_PASSWORD}" \
+            -X POST "$$KB/api/observability/slos" \
+            -H "Content-Type: application/json" -H "kbn-xsrf: true" \
+            -d "$$JSON" > /dev/null \
+            && echo "  + $$NAME" || echo "  ($$NAME may already exist)"
+        }
+
+        echo "=== Creating SLOs ==="
+
+        # east-gateway (user-facing fan-out; 1000ms latency budget)
+        create_slo "east-gateway — Availability" \
+          '{"name":"east-gateway \u2014 Availability","description":"99.5% of gateway requests succeed","indicator":{"type":"sli.apm.transactionErrorRate","params":{"service":"east-gateway","environment":"*","transactionType":"request","transactionName":"*","index":"metrics-apm*"}},"timeWindow":{"duration":"30d","type":"rolling"},"budgetingMethod":"occurrences","objective":{"target":0.995}}'
+        create_slo "east-gateway — Latency" \
+          '{"name":"east-gateway \u2014 Latency","description":"95% of gateway requests complete in under 1000ms","indicator":{"type":"sli.apm.transactionDuration","params":{"service":"east-gateway","environment":"*","transactionType":"request","transactionName":"*","index":"metrics-apm*","threshold":1000}},"timeWindow":{"duration":"30d","type":"rolling"},"budgetingMethod":"occurrences","objective":{"target":0.95}}'
+
+        # east-catalog (slow DB queries ~15% of the time; 1000ms latency budget)
+        create_slo "east-catalog — Availability" \
+          '{"name":"east-catalog \u2014 Availability","description":"99.5% of catalog requests succeed","indicator":{"type":"sli.apm.transactionErrorRate","params":{"service":"east-catalog","environment":"*","transactionType":"request","transactionName":"*","index":"metrics-apm*"}},"timeWindow":{"duration":"30d","type":"rolling"},"budgetingMethod":"occurrences","objective":{"target":0.995}}'
+        create_slo "east-catalog — Latency" \
+          '{"name":"east-catalog \u2014 Latency","description":"95% of catalog requests complete in under 1000ms","indicator":{"type":"sli.apm.transactionDuration","params":{"service":"east-catalog","environment":"*","transactionType":"request","transactionName":"*","index":"metrics-apm*","threshold":1000}},"timeWindow":{"duration":"30d","type":"rolling"},"budgetingMethod":"occurrences","objective":{"target":0.95}}'
+
+        # east-inventory (variable latency; 500ms latency budget)
+        create_slo "east-inventory — Availability" \
+          '{"name":"east-inventory \u2014 Availability","description":"99.5% of inventory requests succeed","indicator":{"type":"sli.apm.transactionErrorRate","params":{"service":"east-inventory","environment":"*","transactionType":"request","transactionName":"*","index":"metrics-apm*"}},"timeWindow":{"duration":"30d","type":"rolling"},"budgetingMethod":"occurrences","objective":{"target":0.995}}'
+        create_slo "east-inventory — Latency" \
+          '{"name":"east-inventory \u2014 Latency","description":"95% of inventory requests complete in under 500ms","indicator":{"type":"sli.apm.transactionDuration","params":{"service":"east-inventory","environment":"*","transactionType":"request","transactionName":"*","index":"metrics-apm*","threshold":500}},"timeWindow":{"duration":"30d","type":"rolling"},"budgetingMethod":"occurrences","objective":{"target":0.95}}'
+
+        # east-pricing (discount logic; 500ms latency budget)
+        create_slo "east-pricing — Availability" \
+          '{"name":"east-pricing \u2014 Availability","description":"99.5% of pricing requests succeed","indicator":{"type":"sli.apm.transactionErrorRate","params":{"service":"east-pricing","environment":"*","transactionType":"request","transactionName":"*","index":"metrics-apm*"}},"timeWindow":{"duration":"30d","type":"rolling"},"budgetingMethod":"occurrences","objective":{"target":0.995}}'
+        create_slo "east-pricing — Latency" \
+          '{"name":"east-pricing \u2014 Latency","description":"95% of pricing requests complete in under 500ms","indicator":{"type":"sli.apm.transactionDuration","params":{"service":"east-pricing","environment":"*","transactionType":"request","transactionName":"*","index":"metrics-apm*","threshold":500}},"timeWindow":{"duration":"30d","type":"rolling"},"budgetingMethod":"occurrences","objective":{"target":0.95}}'
+
+        # east-reviews (aggregation service; 500ms latency budget)
+        create_slo "east-reviews — Availability" \
+          '{"name":"east-reviews \u2014 Availability","description":"99.5% of reviews requests succeed","indicator":{"type":"sli.apm.transactionErrorRate","params":{"service":"east-reviews","environment":"*","transactionType":"request","transactionName":"*","index":"metrics-apm*"}},"timeWindow":{"duration":"30d","type":"rolling"},"budgetingMethod":"occurrences","objective":{"target":0.995}}'
+        create_slo "east-reviews — Latency" \
+          '{"name":"east-reviews \u2014 Latency","description":"95% of reviews requests complete in under 500ms","indicator":{"type":"sli.apm.transactionDuration","params":{"service":"east-reviews","environment":"*","transactionType":"request","transactionName":"*","index":"metrics-apm*","threshold":500}},"timeWindow":{"duration":"30d","type":"rolling"},"budgetingMethod":"occurrences","objective":{"target":0.95}}'
+
+        # east-orders (slow-query warnings ~12% of the time; 1000ms latency budget)
+        create_slo "east-orders — Availability" \
+          '{"name":"east-orders \u2014 Availability","description":"99.5% of orders requests succeed","indicator":{"type":"sli.apm.transactionErrorRate","params":{"service":"east-orders","environment":"*","transactionType":"request","transactionName":"*","index":"metrics-apm*"}},"timeWindow":{"duration":"30d","type":"rolling"},"budgetingMethod":"occurrences","objective":{"target":0.995}}'
+        create_slo "east-orders — Latency" \
+          '{"name":"east-orders \u2014 Latency","description":"95% of orders requests complete in under 1000ms","indicator":{"type":"sli.apm.transactionDuration","params":{"service":"east-orders","environment":"*","transactionType":"request","transactionName":"*","index":"metrics-apm*","threshold":1000}},"timeWindow":{"duration":"30d","type":"rolling"},"budgetingMethod":"occurrences","objective":{"target":0.95}}'
+
+        # east-recommendations (ML scoring via OTLP; 500ms latency budget)
+        create_slo "east-recommendations — Availability" \
+          '{"name":"east-recommendations \u2014 Availability","description":"99.5% of recommendations requests succeed","indicator":{"type":"sli.apm.transactionErrorRate","params":{"service":"east-recommendations","environment":"*","transactionType":"request","transactionName":"*","index":"metrics-apm*"}},"timeWindow":{"duration":"30d","type":"rolling"},"budgetingMethod":"occurrences","objective":{"target":0.995}}'
+        create_slo "east-recommendations — Latency" \
+          '{"name":"east-recommendations \u2014 Latency","description":"95% of recommendations requests complete in under 500ms","indicator":{"type":"sli.apm.transactionDuration","params":{"service":"east-recommendations","environment":"*","transactionType":"request","transactionName":"*","index":"metrics-apm*","threshold":500}},"timeWindow":{"duration":"30d","type":"rolling"},"budgetingMethod":"occurrences","objective":{"target":0.95}}'
+
+        mkdir -p config/certs/tokens
+        touch config/certs/tokens/slos-created
+        echo "=== slo-setup complete ==="
 
   # ── Landing page ─────────────────────────────────────────────────────────────
   # Nginx with error_page 497 to redirect HTTP→HTTPS on the same port.

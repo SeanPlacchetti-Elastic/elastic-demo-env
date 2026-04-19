@@ -100,8 +100,8 @@ fn is_degraded() -> bool {
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
         .as_secs()
-        % 600;
-    (480..=510).contains(&cycle_pos)
+        % 240;
+    (192..=204).contains(&cycle_pos)
 }
 
 async fn health() -> Json<Value> {
@@ -145,12 +145,12 @@ async fn recommendations() -> (StatusCode, Json<Value>) {
     }
 
     let mut recs = vec![
-        json!({"product_id": 2, "name": "Kibana Dashboard Pro",   "score": 0.97, "reason": "frequently bought with Elasticsearch Node"}),
-        json!({"product_id": 6, "name": "Synthetic Monitor Pack", "score": 0.91, "reason": "commonly paired with APM Server Token"}),
-        json!({"product_id": 5, "name": "Fleet Server License",   "score": 0.88, "reason": "required for managed agent deployments"}),
-        json!({"product_id": 3, "name": "Logstash Enterprise",    "score": 0.82, "reason": "popular data pipeline addition"}),
-        json!({"product_id": 4, "name": "APM Server Token",       "score": 0.79, "reason": "enables full observability stack"}),
-        json!({"product_id": 1, "name": "Elasticsearch Node",     "score": 0.75, "reason": "scale your cluster"}),
+        json!({"product_id": 2, "name": "KC-46A Pegasus",        "score": 0.97, "reason": "optimal primary tanker for multi-ship strike packages"}),
+        json!({"product_id": 3, "name": "KC-10 Extender",        "score": 0.91, "reason": "maximum offload capacity for long-range B-52 missions"}),
+        json!({"product_id": 1, "name": "KC-135 Stratotanker",   "score": 0.88, "reason": "proven reliability for high-altitude AAR corridors"}),
+        json!({"product_id": 5, "name": "F-15E Strike Eagle",    "score": 0.82, "reason": "wet-wing compatibility with boom receptacle systems"}),
+        json!({"product_id": 6, "name": "B-52H Stratofortress",  "score": 0.79, "reason": "high priority receiver for extended overwater patrol support"}),
+        json!({"product_id": 4, "name": "F-16C Fighting Falcon", "score": 0.75, "reason": "lightweight receiver for tactical close air support sorties"}),
     ];
 
     // Enrich recommendations with catalog and review data

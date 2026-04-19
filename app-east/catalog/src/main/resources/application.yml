@@ -4,6 +4,11 @@ server:
 spring:
   application:
     name: east-catalog
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:catalog-db}:5432/${DB_NAME:catalog}
+    username: ${DB_USER:catalog}
+    password: ${DB_PASSWORD:catalog123}
+    driver-class-name: org.postgresql.Driver
 
 logging:
   config: classpath:logback-spring.xml

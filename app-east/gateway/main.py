@@ -145,7 +145,7 @@ async def search(q: str = Query("", min_length=0)):
     if not es or not q:
         return {"results": [], "count": 0, "query": q, "type": "lexical"}
     t0 = time.perf_counter()
-    resp = es.search(index="products", query={
+    resp = es.search(index="aircraft", query={
         "multi_match": {
             "query": q,
             "fields": ["name^3", "description", "tags^2", "category"],
@@ -165,8 +165,8 @@ async def typeahead(q: str = Query("", min_length=0)):
     if not es or not q:
         return {"suggestions": [], "query": q, "type": "completion"}
     t0 = time.perf_counter()
-    resp = es.search(index="products", suggest={
-        "product-suggest": {
+    resp = es.search(index="aircraft", suggest={
+        "aircraft-suggest": {
             "prefix": q,
             "completion": {
                 "field": "suggest",
@@ -176,7 +176,7 @@ async def typeahead(q: str = Query("", min_length=0)):
             }
         }
     })
-    options = resp.get("suggest", {}).get("product-suggest", [{}])[0].get("options", [])
+    options = resp.get("suggest", {}).get("aircraft-suggest", [{}])[0].get("options", [])
     suggestions = [{"text": o["text"], "_id": o["_id"], "name": o["_source"]["name"],
                      "category": o["_source"].get("category", ""), "_score": o["_score"]}
                     for o in options]
@@ -191,7 +191,7 @@ async def search_as_you_type(q: str = Query("", min_length=0)):
     if not es or not q:
         return {"results": [], "count": 0, "query": q, "type": "search_as_you_type"}
     t0 = time.perf_counter()
-    resp = es.search(index="products", query={
+    resp = es.search(index="aircraft", query={
         "multi_match": {
             "query": q,
             "type": "bool_prefix",
@@ -207,6 +207,27 @@ async def search_as_you_type(q: str = Query("", min_length=0)):
     elapsed = round((time.perf_counter() - t0) * 1000)
     logger.info("Search-as-you-type", extra={"query": q, "hits": len(hits), "duration_ms": elapsed})
     return {"results": hits, "count": len(hits), "query": q, "type": "search_as_you_type", "took_ms": elapsed}
+
+
+@app.get("/search/template")
+async def smart_search(q: str = Query("", min_length=0)):
+    """Stored search template spanning aircraft, missions, airbases, and crews."""
+    if not es or not q:
+        return {"results": [], "count": 0, "query": q, "type": "template"}
+    t0 = time.perf_counter()
+    resp = es.search_template(
+        index="aircraft,missions,airbases,crews",
+        body={"id": "usaf-smart-search", "params": {"query": q, "size": 12}},
+    )
+    hits = []
+    for h in resp["hits"]["hits"]:
+        result = {"_id": h["_id"], "_index": h["_index"], "_score": h["_score"], **h["_source"]}
+        if "highlight" in h:
+            result["_highlight"] = h["highlight"]
+        hits.append(result)
+    elapsed = round((time.perf_counter() - t0) * 1000)
+    logger.info("Smart template search", extra={"query": q, "hits": len(hits), "duration_ms": elapsed})
+    return {"results": hits, "count": len(hits), "query": q, "type": "template", "took_ms": elapsed}
 
 
 @app.get("/error")

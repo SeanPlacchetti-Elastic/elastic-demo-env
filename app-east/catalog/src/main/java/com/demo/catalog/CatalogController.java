@@ -1,9 +1,11 @@
 package com.demo.catalog;
 
+import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.*;
@@ -14,28 +16,75 @@ public class CatalogController {
 
     private static final Logger log = LoggerFactory.getLogger(CatalogController.class);
 
+    private final JdbcTemplate jdbc;
+
     /** Scenario clock cycle length in seconds. */
-    private static final long CYCLE_SECONDS = 600;
+    private static final long CYCLE_SECONDS = 240;
 
-    /** Degraded window: seconds 420 (minute 7) through 510 (minute 8.5). */
-    private static final long DEGRADED_START = 420;
-    private static final long DEGRADED_END   = 510;
+    /** Degraded window: seconds 168 (minute 2.8) through 204 (minute 3.4). */
+    private static final long DEGRADED_START = 168;
+    private static final long DEGRADED_END   = 204;
 
-    private static final List<Map<String, Object>> PRODUCTS = List.of(
-        product(1, "Elasticsearch Node",     "ES-NODE-01",    "infrastructure", 999,  499.00),
-        product(2, "Kibana Dashboard Pro",   "KB-DASH-PRO",   "visualization",   50,  299.00),
-        product(3, "Logstash Enterprise",    "LS-ENT-01",     "ingest",          12,  199.00),
-        product(4, "APM Server Token",       "APM-TOKEN-01",  "observability",    0,   99.00),
-        product(5, "Fleet Server License",   "FLEET-LIC-01",  "management",       3,  149.00),
-        product(6, "Synthetic Monitor Pack", "SYNTH-PACK-01", "observability",   25,   79.00)
-    );
+    public CatalogController(JdbcTemplate jdbc) {
+        this.jdbc = jdbc;
+    }
+
+    // ── Database bootstrap ──────────────────────────────────────────────
+
+    @PostConstruct
+    void initDatabase() {
+        jdbc.execute("""
+            CREATE TABLE IF NOT EXISTS aircraft (
+                id   SERIAL PRIMARY KEY,
+                name VARCHAR(100) NOT NULL,
+                designation VARCHAR(50) NOT NULL,
+                category    VARCHAR(20) NOT NULL,
+                fleet_count INT NOT NULL,
+                fuel_capacity_lbs DOUBLE PRECISION NOT NULL
+            )
+        """);
+
+        Integer count = jdbc.queryForObject("SELECT COUNT(*) FROM aircraft", Integer.class);
+        if (count != null && count == 0) {
+            log.info("Seeding aircraft table in PostgreSQL");
+            String sql = "INSERT INTO aircraft (name, designation, category, fleet_count, fuel_capacity_lbs) VALUES (?, ?, ?, ?, ?)";
+            jdbc.update(sql, "KC-135 Stratotanker",  "TANKER-135",    "tanker",  48, 200000.0);
+            jdbc.update(sql, "KC-46A Pegasus",       "TANKER-46A",    "tanker",  15, 212000.0);
+            jdbc.update(sql, "KC-10 Extender",       "TANKER-10",     "tanker",   6, 356000.0);
+            jdbc.update(sql, "F-16C Fighting Falcon","RECEIVER-F16C", "fighter", 72,   7000.0);
+            jdbc.update(sql, "F-15E Strike Eagle",   "RECEIVER-F15E", "fighter", 36,  13455.0);
+            jdbc.update(sql, "B-52H Stratofortress", "RECEIVER-B52H", "bomber",  20, 312197.0);
+            log.info("Seeded 6 aircraft records into PostgreSQL");
+        }
+    }
+
+    // ── Helpers ─────────────────────────────────────────────────────────
+
+    private List<Map<String, Object>> loadProducts() {
+        return jdbc.query("SELECT * FROM aircraft ORDER BY id", (rs, rowNum) -> {
+            Map<String, Object> m = new LinkedHashMap<>();
+            int id = rs.getInt("id");
+            String name = rs.getString("name");
+            String designation = rs.getString("designation");
+            String category = rs.getString("category");
+            int fleetCount = rs.getInt("fleet_count");
+            double fuelCapacity = rs.getDouble("fuel_capacity_lbs");
+            m.put("id", id);
+            m.put("name", name);
+            m.put("sku", designation);
+            m.put("designation", designation);
+            m.put("category", category);
+            m.put("role", category);
+            m.put("stock", fleetCount);
+            m.put("fleet_count", fleetCount);
+            m.put("price", fuelCapacity);
+            m.put("fuel_capacity_lbs", fuelCapacity);
+            return m;
+        });
+    }
 
     // ── Scenario clock ──────────────────────────────────────────────────
 
-    /**
-     * Returns {@code true} when the 10-minute scenario clock is inside the
-     * degraded window (seconds 420-510).
-     */
     private boolean isDegraded() {
         if (!"true".equalsIgnoreCase(System.getenv("ANOMALY_ENABLED"))) return false;
         long cyclePosition = (System.currentTimeMillis() / 1000) % CYCLE_SECONDS;
@@ -54,81 +103,80 @@ public class CatalogController {
         ThreadLocalRandom rng = ThreadLocalRandom.current();
 
         if (isDegraded()) {
-            // ── Degraded mode ───────────────────────────────────────
             double roll = rng.nextDouble();
 
             if (roll < 0.15) {
-                // 15 % of requests: simulated DB connection pool exhaustion
                 int delayMs = rng.nextInt(50, 200);
                 Thread.sleep(delayMs);
-                log.warn("Database connection pool exhausted; event.action=db-pool-exhaustion "
+                log.warn("Aircraft registry database connection pool exhausted; event.action=db-pool-exhaustion "
                          + "scenario=degraded query_time_ms={} http.status_code=503", delayMs);
                 return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
                     .body(Map.of(
-                        "error", "database connection pool exhausted",
+                        "error", "aircraft registry database connection pool exhausted",
                         "event.action", "db-pool-exhaustion",
                         "scenario", "degraded"
                     ));
             }
 
             if (roll < 0.75) {
-                // 60 % of requests: slow latency (400-1200 ms)
                 int delayMs = rng.nextInt(400, 1200);
                 Thread.sleep(delayMs);
-                log.warn("Degraded product listing – elevated latency; scenario=degraded "
-                         + "query_time_ms={} product_count={}", delayMs, PRODUCTS.size());
-                return ResponseEntity.ok(Map.of("products", PRODUCTS, "count", PRODUCTS.size()));
+                List<Map<String, Object>> products = loadProducts();
+                log.warn("Degraded aircraft listing – elevated latency; scenario=degraded "
+                         + "query_time_ms={} aircraft_count={}", delayMs, products.size());
+                return ResponseEntity.ok(Map.of("products", products, "count", products.size()));
             }
 
-            // Remaining 25 % in degraded mode: normal-ish baseline
             int delayMs = rng.nextInt(10, 80);
             Thread.sleep(delayMs);
-            log.info("Product listing served; scenario=degraded product_count={} query_time_ms={}",
-                     PRODUCTS.size(), delayMs);
-            return ResponseEntity.ok(Map.of("products", PRODUCTS, "count", PRODUCTS.size()));
+            List<Map<String, Object>> products = loadProducts();
+            log.info("Aircraft listing served; scenario=degraded aircraft_count={} query_time_ms={}",
+                     products.size(), delayMs);
+            return ResponseEntity.ok(Map.of("products", products, "count", products.size()));
 
         } else {
-            // ── Normal mode ─────────────────────────────────────────
             int delayMs = rng.nextInt(10, 80);
 
             if (rng.nextDouble() < 0.15) {
                 delayMs = rng.nextInt(250, 650);
-                log.warn("Slow product listing query detected; scenario=normal query_time_ms={}",
+                log.warn("Slow aircraft registry query detected; scenario=normal query_time_ms={}",
                          delayMs);
             }
 
             Thread.sleep(delayMs);
-            log.info("Product listing served; scenario=normal product_count={} query_time_ms={}",
-                     PRODUCTS.size(), delayMs);
-            return ResponseEntity.ok(Map.of("products", PRODUCTS, "count", PRODUCTS.size()));
+            List<Map<String, Object>> products = loadProducts();
+            log.info("Aircraft listing served; scenario=normal aircraft_count={} query_time_ms={}",
+                     products.size(), delayMs);
+            return ResponseEntity.ok(Map.of("products", products, "count", products.size()));
         }
     }
 
     @GetMapping("/products/{id}")
     public ResponseEntity<Object> getProduct(@PathVariable int id) throws InterruptedException {
         Thread.sleep(ThreadLocalRandom.current().nextInt(5, 40));
-        return PRODUCTS.stream()
-            .filter(p -> ((Number) p.get("id")).intValue() == id)
-            .findFirst()
-            .<ResponseEntity<Object>>map(ResponseEntity::ok)
-            .orElseGet(() -> {
-                log.warn("Product not found; product_id={}", id);
-                return ResponseEntity.status(404)
-                    .body(Map.of("error", "Product " + id + " not found"));
-            });
-    }
-
-    // ── Helpers ─────────────────────────────────────────────────────────
-
-    private static Map<String, Object> product(int id, String name, String sku,
-                                                String category, int stock, double price) {
-        Map<String, Object> m = new LinkedHashMap<>();
-        m.put("id", id);
-        m.put("name", name);
-        m.put("sku", sku);
-        m.put("category", category);
-        m.put("stock", stock);
-        m.put("price", price);
-        return Collections.unmodifiableMap(m);
+        List<Map<String, Object>> results = jdbc.query(
+            "SELECT * FROM aircraft WHERE id = ?",
+            (rs, rowNum) -> {
+                Map<String, Object> m = new LinkedHashMap<>();
+                m.put("id", rs.getInt("id"));
+                m.put("name", rs.getString("name"));
+                m.put("sku", rs.getString("designation"));
+                m.put("designation", rs.getString("designation"));
+                m.put("category", rs.getString("category"));
+                m.put("role", rs.getString("category"));
+                m.put("stock", rs.getInt("fleet_count"));
+                m.put("fleet_count", rs.getInt("fleet_count"));
+                m.put("price", rs.getDouble("fuel_capacity_lbs"));
+                m.put("fuel_capacity_lbs", rs.getDouble("fuel_capacity_lbs"));
+                return m;
+            },
+            id
+        );
+        if (results.isEmpty()) {
+            log.warn("Aircraft not found; aircraft_id={}", id);
+            return ResponseEntity.status(404)
+                .body(Map.of("error", "Aircraft " + id + " not found"));
+        }
+        return ResponseEntity.ok(results.get(0));
     }
 }

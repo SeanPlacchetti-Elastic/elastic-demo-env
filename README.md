@@ -31,8 +31,9 @@ A local Docker Compose stack demonstrating a two-cluster Elastic deployment with
 │  ├─ east-recommendations (internal)   Rust                  │
 │  └─ west-webapp          (port 8000)  Python (APM → east)   │
 │                                                             │
-│  search-es01 (port 9202) — application search backend       │
-│    products index: lexical + search-as-you-type + suggest   │
+│  search-es01    (port 9202) — application search backend    │
+│  kibana-search  (port 5603) — Kibana for search cluster     │
+│    aircraft index: lexical + search-as-you-type + suggest   │
 └─────────────────────────────────────────────────────────────┘
 
 Landing page (port 8080) — investigation narratives + service links.
@@ -47,7 +48,7 @@ Traffic generator (loadgen) hits all endpoints every 3s.
 
 - Docker Desktop (or Docker Engine + Compose plugin)
 - At least 16 GB RAM allocated to Docker
-- Ports 5601, 5602, 8000, 8001, 8080, 8200, 8201, 8220, 9200, 9201 free
+- Ports 5601, 5602, 5603, 8000, 8001, 8002, 8080, 8200, 8201, 8220, 9200, 9201, 9202 free
 
 ### 1. Configure `.env`
 
@@ -61,10 +62,11 @@ Key variables:
 
 | Variable | Default | Description |
 |---|---|---|
-| `ELASTIC_PASSWORD` | `changeme` | Superuser password for both clusters |
+| `ELASTIC_PASSWORD` | `changeme` | Superuser password for all clusters |
 | `KIBANA_PASSWORD` | `changeme` | `kibana_system` account on cluster-west |
 | `EAST_KIBANA_PASSWORD` | `east-changeme` | `kibana_system` account on cluster-east |
-| `STACK_VERSION` | `8.19.13` | Elastic stack version |
+| `SEARCH_KIBANA_PASSWORD` | `search-changeme` | `kibana_system` account on search cluster |
+| `STACK_VERSION` | `8.19.14` | Elastic stack version |
 | `LICENSE` | `trial` | `basic` or `trial` (enables 30-day trial) |
 
 ### 2. Start the stack
@@ -79,12 +81,13 @@ First boot takes 3–5 minutes. The `setup` service generates TLS certificates a
 
 | Service | URL | Notes |
 |---|---|---|
-| **Landing page** | https://localhost:8080 | Links to all services |
-| **Kibana — West** | https://localhost:5601 | Primary / CCS coordinator |
-| **Kibana — East** | https://localhost:5602 | Remote cluster |
+| **Landing page** | https://localhost:8080 | Links to all services + investigation playbooks |
+| **Kibana — West** | https://localhost:5601 | NOC / CCS coordinator — alerts, CCS dashboards |
+| **Kibana — East** | https://localhost:5602 | Production — APM, Logs, ML, Synthetics, SLOs |
+| **Kibana — Search** | https://localhost:5603 | Search cluster — aircraft index, mappings |
 | **West Webapp** | https://localhost:8000 | APM demo app |
-| **Development Gateway** | https://localhost:8001 | Microservices with anomalies |
-| **Production Gateway** | https://localhost:8002 | Microservices, stable |
+| **Development Gateway** | https://localhost:8001 | Microservices with anomalies enabled |
+| **Production Gateway** | https://localhost:8002 | Microservices, stable (no anomalies) |
 | **West ES API** | https://localhost:9200 | |
 | **East ES API** | https://localhost:9201 | |
 | **Search ES API** | https://localhost:9202 | Application search backend |
@@ -139,16 +142,16 @@ The gateway UI (https://localhost:8001) has a tabbed search bar where you can sw
 
 #### Cascading Anomaly Pattern
 
-All east services follow a **10-minute (600-second) cycle** with time-based degradation windows. During each window, the service introduces latency spikes and HTTP 503 errors. The windows are **staggered** to create a realistic cascading failure:
+All east services follow a **4-minute (240-second) cycle** with time-based degradation windows. During each window, the service introduces latency spikes and HTTP 503 errors. The windows are **staggered** to create a realistic cascading failure:
 
 | Service | Degraded Window | Slow Requests | 503 Errors | Error Type |
 |---|---|---|---|---|
-| `east-catalog` | 420s–510s | 60% | 15% | DB connection pool exhaustion |
-| `east-inventory` | 440s–510s | 50% | 10% | Warehouse sync timeout |
-| `east-pricing` | 450s–510s | 45% | 10% | Cache miss / rate limit exceeded |
-| `east-reviews` | 460s–510s | 40% | 12% | Connection pool exhausted |
-| `east-orders` | 470s–510s | 50% | 12% | Database deadlock |
-| `east-recommendations` | 480s–510s | 55% | 10% | Model inference timeout |
+| `east-catalog` | 168s–204s | 60% | 15% | DB connection pool exhaustion |
+| `east-inventory` | 176s–204s | 50% | 10% | Depot sync timeout |
+| `east-pricing` | 180s–204s | 45% | 10% | Cache miss / rate limit exceeded |
+| `east-reviews` | 184s–204s | 40% | 12% | Connection pool exhausted |
+| `east-orders` | 188s–204s | 50% | 12% | Database deadlock |
+| `east-recommendations` | 192s–204s | 55% | 10% | Model inference timeout |
 
 A **traffic generator** (`loadgen`) continuously hits all endpoints every 3 seconds, ensuring ML jobs have enough data points to establish baselines and detect the anomaly windows.
 
@@ -263,13 +266,65 @@ These alerts demonstrate how an operations team on a separate cluster can monito
 
 ### Guided Investigation Narratives
 
-The landing page (https://localhost:8080) includes three step-by-step investigations that walk you through the core Elastic Observability workflow: **detect → triage → correlate → root-cause**.
+The landing page (https://localhost:8080) includes four step-by-step investigation playbooks that walk through the core Elastic Observability workflow: **detect → triage → correlate → root-cause**. All investigations target **East Kibana** (port 5602) unless noted.
 
-1. **The Cascading Slowdown** — Start from the APM Service Map, notice services turning red, drill into a slow trace, pivot to logs by `trace.id`, and confirm the anomaly in ML Explorer. Root cause: catalog degrades first at second 420, others follow.
+#### Investigation 1 — The Cascading Slowdown
 
-2. **Error Spike Correlation** — Start from the ML Anomaly Explorer `demo-apm-error-rate` job. Compare error messages across services (each language reports the failure differently). Filter logs by `scenario: degraded` to see all errors cluster in the same 90-second window.
+**Scenario:** A mission coordinator reports the ops portal is slow. No single alert has fired yet.
 
-3. **The Latency Outlier** — Start from `demo-latency-outliers` ML job. Identify that `east-recommendations` has the highest anomaly score (600-2000ms vs 10-80ms baseline). Trace a slow request, see the bimodal latency distribution in APM, and correlate with "model timeout" log messages.
+1. **APM → Service Map** — Watch for services turning yellow/red. `east-catalog` degrades first at second 168 of the 4-minute cycle.
+2. Click `east-catalog` → **Transactions** → filter to `GET /aircraft`. Sort by duration descending. P95 spikes from ~50ms to 800–1500ms.
+3. Open a slow trace. **Trace waterfall** confirms 60–80% of total duration is inside the `east-catalog` span. The slowness is not in any downstream call.
+4. Click **View in Discover** in the waterfall header. Discover opens pre-filtered to `trace.id: <id>`. Look for log lines with `scenario: degraded` and the message `"aircraft registry database connection pool exhausted"`.
+5. Check `east-inventory`, `east-pricing`, and `east-orders` in APM. Each shows a degradation window starting later (176s, 180s, 188s) — the cascade in action.
+6. **ML → Anomaly Explorer → `demo-latency-outliers`** — all six services appear in the swimlane. Anomaly scores align with the degradation windows in the reference table.
+
+**Root cause:** `east-catalog` exhausts its DB connection pool. All dependent services begin returning 503s as upstream catalog calls time out, each with its own retry budget creating the stagger.
+
+---
+
+#### Investigation 2 — Error Spike Correlation
+
+**Scenario:** The `demo-apm-error-rate` ML job fires. Multiple services show 503 errors simultaneously — one incident or six?
+
+1. **ML → Anomaly Explorer → `demo-apm-error-rate`** — multiple services flagged in the same 5-minute bucket with anomaly scores of 50–95.
+2. Click an anomaly cell → **View in APM**. The Errors tab shows the exception. Note the message — each language reports its failure differently (Java: `"db pool exhaustion"`, Ruby: `"database deadlock"`, Go: `"depot sync timeout"`).
+3. **Observability → Logs → Explorer** (or Discover against `filebeat-*`). KQL: `log.level: (WARN OR ERROR) AND scenario: degraded`. All matching log lines cluster within the same 36-second degradation window.
+4. Add `service.name` as a breakdown field. Six services, different messages, same timestamp cluster — the signature of a cascading failure, not independent bugs.
+5. **Observability → Logs → Log Anomalies** — the `demo-log-rate` job surfaces the same window as an unusual log volume spike, corroborating the APM signal from a different data source.
+6. **Observability → SLOs** — filter to affected services. Availability SLOs (99.5% target) are burning error budget during the degradation window.
+
+**Root cause:** All 503 errors are downstream consequences of the same catalog failure. The polyglot error messages describe each service's local failure response, not the underlying cause — a common trap in microservice debugging.
+
+---
+
+#### Investigation 3 — The Latency Outlier
+
+**Scenario:** SLO burn rate alert fires for Tanker Pairings. Latency is far outside bounds but error rate looks almost normal.
+
+1. **ML → Anomaly Explorer → `demo-latency-outliers`** → **Single Metric Viewer** → partition `east-recommendations`. Model bound shows a normal baseline of 10–80ms. Actual values during degradation: 600–2000ms.
+2. **APM → Services → east-recommendations → Transactions**. The **Latency distribution** histogram shows a bimodal shape — two distinct peaks, not a tail. This is a hard on/off toggle, not gradual drift.
+3. Filter transactions by duration > 500ms. Open one. The trace waterfall shows the entire request time consumed inside a single `recommendations` span with no downstream calls. The slowness is internal.
+4. Click **View in Discover** → find the log with `"Recommendation model timeout"`. The `transaction.id` in the log matches the trace.
+5. Open a normal trace (duration < 100ms) from the same service. Same endpoint, same code path — the bimodal distribution is purely the degradation flag, not load-dependent.
+6. **Observability → SLOs → east-recommendations latency SLO** (P95 < 500ms target). During the degradation window, P95 blows past 500ms and the error budget is actively burning.
+
+**Root cause:** The Rust recommendation engine simulates a model inference timeout during second 192–204. It's the last service to degrade but has the most extreme latency. Low error rate (10%) combined with extreme latency makes it the hardest to catch without ML.
+
+---
+
+#### Investigation 4 — Cross-Cluster NOC View
+
+**Scenario:** You're an ops engineer on the NOC team. You have read-only visibility into east production via CCS — no direct production access.
+
+1. Open **West Kibana** (port 5601). Log in as `ccs-analyst / CcsAnalyst1!`. This account has cross-cluster read permissions but cannot modify east data.
+2. **Observability → APM** — the data view is `cluster-east:traces-apm*`. East production APM data rendered in your local Kibana with no replication.
+3. **Alerting → Rules** — three CCS alerting rules watching east: *High Error Rate*, *Degraded Mode Detected*, *Health Check Failure*. All query `cluster-east:*` index patterns. Rule owner is west; data is east.
+4. When a degradation window hits, **Alerting → Alerts** — the *East Microservices — High Error Rate* rule fires. Alert context includes east trace data retrieved via CCS at alert evaluation time.
+5. **Discover** → switch to the `cluster-east filebeat` data view → KQL: `scenario: degraded`. Full-text log search across east's filebeat indices, executed from west. No data movement.
+6. Dev Tools: `GET cluster-east:filebeat-*/_count`. The CCS coordinator (west-es01) proxies the query to east-es01. Response time is typically < 50ms over the net-ccs Docker bridge.
+
+**Architecture value:** CCS centralises alerting and NOC dashboards in one place while keeping production data isolated. A compromised NOC workstation cannot write to production indices. No ETL or data replication required.
 
 ---
 
@@ -324,16 +379,18 @@ docker compose up -d --no-deps fleet-server elastic-agent-synthetics
 ├── compose/                    # Compose sub-files (included by root)
 │   ├── setup.yml               # One-shot TLS + user provisioning
 │   ├── cluster-west.yml        # West ES cluster, Kibana, APM, beats, webapp
-│   ├── cluster-east.yml        # East ES cluster, Kibana, APM, beats, microservices
+│   ├── cluster-east.yml        # East ES cluster, Kibana, APM, beats, search, microservices (dev)
+│   ├── cluster-east-prod.yml   # Production copy of east microservices (no anomalies)
 │   └── fleet.yml               # Fleet Server, synthetics agent, heartbeat, landing
 ├── config/                     # Beat / Kibana configuration files
 │   ├── heartbeat.yml           # Heartbeat monitor definitions
 │   ├── west-filebeat.yml       # West filebeat config
-│   ├── east-filebeat.yml       # East filebeat config (+ docker autodiscover)
+│   ├── east-filebeat.yml       # East filebeat config (container log collection)
 │   ├── west-metricbeat.yml     # West metricbeat config
 │   ├── east-metricbeat.yml     # East metricbeat config
 │   ├── kibana.yml              # West Kibana config
-│   └── kibana-east.yml         # East Kibana config (APM enabled)
+│   ├── kibana-east.yml         # East Kibana config (APM enabled)
+│   └── kibana-search.yml       # Search cluster Kibana config
 ├── app/                        # West webapp (Python / FastAPI + APM)
 │   ├── main.py
 │   ├── templates/index.html
