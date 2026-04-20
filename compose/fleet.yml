@@ -729,6 +729,102 @@ services:
         touch config/certs/tokens/east-alerts-created
         echo "=== east-alert-setup complete ==="
 
+  # ── Security setup (east Kibana — Security solution prep) ────────────────────
+  # One-shot, idempotent. Does three things in east Kibana:
+  #   1. Install prepackaged detection rules (~1700) and enable them all.
+  #   2. Install + start every bundled Security ML module (anomaly detection
+  #      for auth, linux, network, packetbeat, cloudtrail, host, windows).
+  #   3. Initialize the Entity Analytics Risk Score engine.
+  # Sentinel: config/certs/tokens/east-security-created
+  east-security-setup:
+    image: docker.elastic.co/elasticsearch/elasticsearch:${STACK_VERSION}
+    user: "0"
+    depends_on:
+      kibana-east:
+        condition: service_healthy
+    networks:
+      - net-east
+    volumes:
+      - certs:/usr/share/elasticsearch/config/certs
+    environment:
+      - ELASTIC_PASSWORD=${ELASTIC_PASSWORD}
+    command:
+      - bash
+      - -c
+      - |
+        set -e
+        CA="config/certs/ca/ca.crt"
+        KB="https://kibana-east:5601"
+        SENTINEL="config/certs/tokens/east-security-created"
+
+        if [ -f "$$SENTINEL" ]; then
+          echo "East security setup already done — skipping."; exit 0
+        fi
+
+        echo "=== Waiting for Kibana-East ==="
+        until curl -sf --cacert $$CA -u "elastic:${ELASTIC_PASSWORD}" \
+            "$$KB/api/status" 2>/dev/null | grep -q '"level":"available"'; do
+          echo "  Kibana not ready..."; sleep 15
+        done
+
+        # ── 1. Install prepackaged detection rules ────────────────────────
+        echo "=== Installing prepackaged detection rules ==="
+        curl -sf --cacert $$CA -u "elastic:${ELASTIC_PASSWORD}" \
+          -X PUT "$$KB/api/detection_engine/rules/prepackaged" \
+          -H "kbn-xsrf: true" 2>/dev/null \
+          | grep -oE '"rules_installed":[0-9]+' || echo "  (install may have already run)"
+
+        # Brief pause so rule saved objects finish indexing before bulk action
+        sleep 8
+
+        # ── 2. Enable all rules (batched by severity — API caps at 1000) ──
+        echo "=== Enabling detection rules (batched by severity) ==="
+        for SEV in low medium high critical; do
+          printf "  severity=%s: " "$$SEV"
+          HTTP=$$(curl -sk --cacert $$CA -u "elastic:${ELASTIC_PASSWORD}" \
+            -X POST "$$KB/api/detection_engine/rules/_bulk_action" \
+            -H "Content-Type: application/json" -H "kbn-xsrf: true" \
+            --max-time 180 -o /tmp/bulk.out -w "%{http_code}" \
+            -d "{\"action\":\"enable\",\"query\":\"alert.attributes.params.severity: $$SEV\"}")
+          if [ "$$HTTP" = "200" ]; then
+            grep -oE '"succeeded":[0-9]+' /tmp/bulk.out | head -1
+          else
+            echo "HTTP $$HTTP"
+          fi
+          sleep 2
+        done
+
+        # ── 3. Install + start all bundled Security ML modules ────────────
+        echo "=== Installing Security ML modules ==="
+        START=$$(( ( $$(date +%s) - 1800 ) * 1000 ))
+        for MOD in security_auth security_cloudtrail security_host \
+                   security_linux_v3 security_network security_packetbeat \
+                   security_windows_v3; do
+          printf "  %s: " "$$MOD"
+          curl -sf --cacert $$CA -u "elastic:${ELASTIC_PASSWORD}" \
+            -X POST "$$KB/s/default/internal/ml/modules/setup/$$MOD" \
+            -H "Content-Type: application/json" -H "kbn-xsrf: true" \
+            -H "elastic-api-version: 1" \
+            -d "{\"prefix\":\"\",\"groups\":[\"security\"],\"startDatafeed\":true,\"start\":$$START,\"useDedicatedIndex\":false}" \
+            2>/dev/null | grep -oE '"jobs":\[[^]]*\]' | head -c 60 \
+            || echo "already installed or not applicable"
+          echo ""
+          sleep 2
+        done
+
+        # ── 4. Initialize Entity Analytics Risk Score engine ──────────────
+        echo "=== Initializing Entity Analytics Risk Score engine ==="
+        curl -sf --cacert $$CA -u "elastic:${ELASTIC_PASSWORD}" \
+          -X POST "$$KB/internal/risk_score/engine/init" \
+          -H "Content-Type: application/json" -H "kbn-xsrf: true" \
+          -H "elastic-api-version: 1" \
+          -d '{}' 2>/dev/null | head -c 200 \
+          && echo "" || echo "  (risk engine may already be initialized)"
+
+        mkdir -p config/certs/tokens
+        touch $$SENTINEL
+        echo "=== east-security-setup complete ==="
+
   # ── SLO setup (east Kibana — APM-based SLOs for each microservice) ───────────
   # One-shot: creates availability and latency SLOs in kibana-east for all 7
   # east microservices.  Idempotent — uses a sentinel file on the certs volume.
